@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import TorneoCard from "../components/TorneoCard";
-import { torneos } from "../data/mockData";
+import { listar } from "../api/torneoApi";
+import type { TorneoResponse } from "../types";
 
 const steps = [
   { icon: "🎮", num: "01", title: "Regístrate", desc: "Crea tu cuenta en segundos y configura tu perfil con tu gamertag." },
@@ -10,15 +12,32 @@ const steps = [
   { icon: "🏆", num: "03", title: "Compite y Gana", desc: "Inscríbete en torneos, supera el bracket y llévate los premios." },
 ];
 
-const stats = [
-  { value: "2,400+", label: "Jugadores activos" },
-  { value: "87", label: "Torneos realizados" },
-  { value: "$48K", label: "En premios repartidos" },
-  { value: "12", label: "Juegos soportados" },
-];
-
 export default function Landing() {
-  const featured = torneos.filter((t) => t.estado === "EN_REGISTRO" || t.estado === "EN_CURSO").slice(0, 3);
+  const [featured, setFeatured] = useState<TorneoResponse[]>([]);
+  const [todos, setTodos] = useState<TorneoResponse[]>([]);
+
+  useEffect(() => {
+    listar()
+      .then((lista) => {
+        setTodos(lista);
+        setFeatured(
+          lista
+            .filter((t) => t.estado === "EN_REGISTRO" || t.estado === "EN_CURSO")
+            .slice(0, 3),
+        );
+      })
+      .catch(() => {
+        setTodos([]);
+        setFeatured([]);
+      });
+  }, []);
+
+  const stats = [
+    { value: String(todos.length), label: "Torneos totales" },
+    { value: String(todos.filter((t) => t.estado === "EN_REGISTRO").length), label: "Con inscripciones abiertas" },
+    { value: String(todos.filter((t) => t.estado === "EN_CURSO").length), label: "En curso ahora" },
+    { value: String(todos.filter((t) => t.estado === "FINALIZADO").length), label: "Torneos finalizados" },
+  ];
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
@@ -73,7 +92,7 @@ export default function Landing() {
           >
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", display: "inline-block" }} />
             <span style={{ fontSize: 13, color: "#94A3B8", fontFamily: "Montserrat, sans-serif", fontWeight: 600 }}>
-              3 torneos activos ahora mismo
+              {featured.length > 0 ? `${featured.length} torneo${featured.length !== 1 ? "s" : ""} activo${featured.length !== 1 ? "s" : ""} ahora mismo` : "Próximos torneos muy pronto"}
             </span>
           </div>
 
@@ -200,17 +219,23 @@ export default function Landing() {
               Ver todos →
             </Link>
           </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 24,
-            }}
-          >
-            {featured.map((t) => (
-              <TorneoCard key={t.id} torneo={t} />
-            ))}
-          </div>
+          {featured.length > 0 ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: 24,
+              }}
+            >
+              {featured.map((t) => (
+                <TorneoCard key={t.id} torneo={t} />
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: "#64748B", fontSize: 15, textAlign: "center", padding: "32px 0" }}>
+              Aún no hay torneos publicados. Vuelve pronto.
+            </p>
+          )}
         </div>
       </section>
 
@@ -317,7 +342,7 @@ export default function Landing() {
             ¿Listo para dominar?
           </h2>
           <p style={{ color: "#94A3B8", fontSize: 17, marginBottom: 36 }}>
-            Únete a más de 2,400 jugadores y empieza tu camino hacia la gloria.
+            Crea tu cuenta, arma tu equipo y empieza tu camino hacia la gloria.
           </p>
           <Link
             to="/register"

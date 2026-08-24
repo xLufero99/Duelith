@@ -1,17 +1,118 @@
-import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Badge from "../components/Badge";
-import { miEquipos } from "../data/mockData";
+import {
+  abandonar,
+  aceptarMiembro,
+  expulsarMiembro,
+  obtenerPorId,
+  transferirCapitania,
+} from "../api/equipoApi";
+import type { EquipoResponse, MiembroResponse } from "../types";
+import { tokenStorage, usuarioStorage } from "../utils/apiClient";
 
 export default function EquipoDetalle() {
   const { id } = useParams();
-  const equipo = miEquipos.find((e) => e.id === Number(id)) ?? miEquipos[0];
+  const navigate = useNavigate();
+  const equipoId = Number(id);
+
+  const [equipo, setEquipo] = useState<EquipoResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [mensaje, setMensaje] = useState("");
   const [showTransferir, setShowTransferir] = useState(false);
+  const [nuevoCapitanId, setNuevoCapitanId] = useState<number | null>(null);
+  const [ejecutando, setEjecutando] = useState(false);
+
+  const usuario = usuarioStorage.get<{ id: number; nombreUsuario: string; rol?: string }>();
+  const autenticado = !!tokenStorage.get();
+
+  const cargar = useCallback(async () => {
+    try {
+      const eq = await obtenerPorId(equipoId);
+      setEquipo(eq);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar el equipo");
+    } finally {
+      setLoading(false);
+    }
+  }, [equipoId]);
+
+  useEffect(() => {
+    setLoading(true);
+    cargar();
+  }, [cargar]);
+
+  const mostrarMsg = (msg: string) => {
+    setMensaje(msg);
+    setTimeout(() => setMensaje(""), 4000);
+  };
+
+  const ejecutar = async (accion: () => Promise<unknown>, msg: string) => {
+    setEjecutando(true);
+    setError("");
+    try {
+      await accion();
+      mostrarMsg(msg);
+      await cargar();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Acción fallida");
+    } finally {
+      setEjecutando(false);
+    }
+  };
+
+  if (loading && !equipo) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0A0A0F", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "#94A3B8", fontSize: 15 }}>Cargando equipo...</p>
+      </div>
+    );
+  }
+
+  if (!equipo) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
+        <Navbar authenticated={autenticado} username={usuario?.nombreUsuario ?? ""} isAdmin={usuario?.rol === "ADMIN"} />
+        <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px", textAlign: "center" }}>
+          <div className="glass-card" style={{ borderRadius: 12, padding: "16px 24px", maxWidth: 480, margin: "80px auto", border: "1px solid rgba(239,68,68,0.35)" }}>
+            <p style={{ color: "#F87171", fontSize: 14 }}>⚠️ {error || "Equipo no encontrado"}</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const soyCapitan = usuario?.id === equipo.capitanId;
+  const miMiembro = equipo.miembros.find((m) => m.usuarioId === usuario?.id);
+  const miRol = soyCapitan ? "CAPITAN" : miMiembro ? miMiembro.rol : "SUPLENTE";
+
+  const confirmarTransferencia = async () => {
+    if (!nuevoCapitanId) return;
+    setShowTransferir(false);
+    await ejecutar(
+      () => transferirCapitania(equipoId, nuevoCapitanId),
+      "Capitanía transferida",
+    );
+  };
+
+  const salirDelEquipo = async () => {
+    setEjecutando(true);
+    setError("");
+    try {
+      await abandonar(equipoId);
+      navigate("/equipos");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo abandonar el equipo");
+      setEjecutando(false);
+    }
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated username="lufero" />
+      <Navbar authenticated={autenticado} username={usuario?.nombreUsuario ?? ""} isAdmin={usuario?.rol === "ADMIN"} />
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28, fontSize: 13, color: "#64748B" }}>
@@ -19,6 +120,18 @@ export default function EquipoDetalle() {
           <span>›</span>
           <span style={{ color: "white" }}>{equipo.nombre}</span>
         </div>
+
+        {/* Mensajes */}
+        {error && (
+          <div className="glass-card" style={{ borderRadius: 12, padding: "16px 24px", marginBottom: 20, border: "1px solid rgba(239,68,68,0.35)" }}>
+            <p style={{ color: "#F87171", fontSize: 14 }}>⚠️ {error}</p>
+          </div>
+        )}
+        {mensaje && (
+          <div className="glass-card" style={{ borderRadius: 12, padding: "16px 24px", marginBottom: 20, border: "1px solid rgba(16,185,129,0.35)" }}>
+            <p style={{ color: "#34D399", fontSize: 14 }}>✓ {mensaje}</p>
+          </div>
+        )}
 
         {/* Header */}
         <div className="glass-card" style={{ borderRadius: 16, padding: "28px 32px", marginBottom: 24, background: "linear-gradient(135deg, rgba(108,43,217,0.12), rgba(22,33,62,0.85))" }}>
@@ -28,20 +141,16 @@ export default function EquipoDetalle() {
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                   <h1 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 800, fontSize: 24, color: "white" }}>{equipo.nombre}</h1>
-                  <Badge estado={equipo.rol} />
+                  {!equipo.activo && <Badge estado="CANCELADO" />}
                 </div>
-                <p style={{ color: "#64748B", fontSize: 14 }}>🎮 {equipo.juego} · {equipo.miembros.length} miembros</p>
+                <p style={{ color: "#64748B", fontSize: 14 }}>🎮 {equipo.juegoPrincipal} · {equipo.miembros.length} miembros</p>
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              {equipo.rol === "CAPITAN" && (
-                <>
-                  <button className="btn-secondary" style={{ fontSize: 13 }}>✏️ Editar nombre</button>
-                  <button className="btn-danger" style={{ fontSize: 13 }}>🚪 Disolver equipo</button>
-                </>
-              )}
-              {equipo.rol === "JUGADOR" && (
-                <button className="btn-danger" style={{ fontSize: 13 }}>🚪 Abandonar equipo</button>
+              {(soyCapitan || miMiembro) && (
+                <button className="btn-danger" style={{ fontSize: 13 }} disabled={ejecutando} onClick={salirDelEquipo}>
+                  🚪 {soyCapitan ? "Disolver / Salir" : "Abandonar equipo"}
+                </button>
               )}
             </div>
           </div>
@@ -54,14 +163,11 @@ export default function EquipoDetalle() {
               <h2 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 17, color: "white" }}>
                 👥 Miembros ({equipo.miembros.length})
               </h2>
-              {equipo.rol === "CAPITAN" && (
-                <button className="btn-primary" style={{ fontSize: 12, padding: "6px 14px" }}>+ Invitar</button>
-              )}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {equipo.miembros.map((m) => (
+              {equipo.miembros.map((m: MiembroResponse) => (
                 <div
-                  key={m.id}
+                  key={m.usuarioId}
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
@@ -88,26 +194,32 @@ export default function EquipoDetalle() {
                         color: "white",
                       }}
                     >
-                      {m.username[0].toUpperCase()}
+                      {m.nombreUsuario[0].toUpperCase()}
                     </div>
                     <div>
-                      <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white" }}>{m.gamertag}</p>
-                      <p style={{ color: "#64748B", fontSize: 12 }}>@{m.username}</p>
+                      <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white" }}>{m.gamertag || m.nombreUsuario}</p>
+                      <p style={{ color: "#64748B", fontSize: 12 }}>@{m.nombreUsuario}</p>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Badge estado={m.rol} />
-                    {equipo.rol === "CAPITAN" && m.rol !== "CAPITAN" && (
+                    {soyCapitan && m.rol !== "CAPITAN" && (
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
-                          onClick={() => setShowTransferir(true)}
+                          onClick={() => {
+                            setNuevoCapitanId(m.usuarioId);
+                            setShowTransferir(true);
+                          }}
+                          disabled={ejecutando}
                           title="Transferir capitanía"
                           style={{ background: "rgba(108,43,217,0.15)", border: "1px solid rgba(108,43,217,0.3)", borderRadius: 6, padding: "4px 8px", color: "#A78BFA", fontSize: 13, cursor: "pointer" }}
                         >
                           👑
                         </button>
                         <button
+                          disabled={ejecutando}
                           title="Expulsar"
+                          onClick={() => ejecutar(() => expulsarMiembro(equipoId, m.usuarioId), `@${m.nombreUsuario} fue retirado del equipo`)}
                           style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 6, padding: "4px 8px", color: "#EF4444", fontSize: 13, cursor: "pointer" }}
                         >
                           🗑️
@@ -122,7 +234,7 @@ export default function EquipoDetalle() {
 
           {/* Solicitudes + info */}
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            {equipo.rol === "CAPITAN" && equipo.solicitudesPendientes.length > 0 && (
+            {soyCapitan && equipo.solicitudesPendientes.length > 0 && (
               <div className="glass-card" style={{ borderRadius: 16, padding: 24 }}>
                 <h2 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 16, color: "white", marginBottom: 16 }}>
                   🔔 Solicitudes Pendientes ({equipo.solicitudesPendientes.length})
@@ -130,7 +242,7 @@ export default function EquipoDetalle() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {equipo.solicitudesPendientes.map((s) => (
                     <div
-                      key={s.id}
+                      key={s.usuarioId}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
@@ -142,12 +254,27 @@ export default function EquipoDetalle() {
                       }}
                     >
                       <div>
-                        <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 13, color: "white" }}>{s.gamertag}</p>
-                        <p style={{ color: "#64748B", fontSize: 11 }}>@{s.username}</p>
+                        <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 13, color: "white" }}>{s.gamertag || s.nombreUsuario}</p>
+                        <p style={{ color: "#64748B", fontSize: 11 }}>@{s.nombreUsuario}</p>
                       </div>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button className="btn-success" style={{ padding: "5px 12px", fontSize: 12 }}>✓ Aceptar</button>
-                        <button className="btn-danger" style={{ padding: "5px 10px", fontSize: 12 }}>✕</button>
+                        <button
+                          className="btn-success"
+                          style={{ padding: "5px 12px", fontSize: 12 }}
+                          disabled={ejecutando}
+                          onClick={() => ejecutar(() => aceptarMiembro(equipoId, s.usuarioId), `@${s.nombreUsuario} ahora es jugador del equipo`)}
+                        >
+                          ✓ Aceptar
+                        </button>
+                        <button
+                          className="btn-danger"
+                          style={{ padding: "5px 10px", fontSize: 12 }}
+                          disabled={ejecutando}
+                          title="Rechazar solicitud"
+                          onClick={() => ejecutar(() => expulsarMiembro(equipoId, s.usuarioId), `Solicitud de @${s.nombreUsuario} rechazada`)}
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -156,12 +283,13 @@ export default function EquipoDetalle() {
             )}
 
             <div className="glass-card" style={{ borderRadius: 16, padding: 24 }}>
-              <h2 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 16, color: "white", marginBottom: 16 }}>📊 Estadísticas</h2>
+              <h2 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 16, color: "white", marginBottom: 16 }}>📊 Información</h2>
               {[
-                { label: "Torneos disputados", value: "3" },
-                { label: "Partidos jugados", value: "12" },
-                { label: "Victorias", value: "8" },
-                { label: "Ratio de victorias", value: "66.7%" },
+                { label: "Juego principal", value: equipo.juegoPrincipal },
+                { label: "Capitán", value: equipo.capitanNombre },
+                { label: "Miembros confirmados", value: String(equipo.miembros.length) },
+                { label: "Fundado", value: new Date(equipo.creadoEn).toLocaleDateString("es") },
+                { label: "Activo", value: equipo.activo ? "Sí" : "No" },
               ].map((stat) => (
                 <div key={stat.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(108,43,217,0.1)" }}>
                   <span style={{ color: "#94A3B8", fontSize: 14 }}>{stat.label}</span>
@@ -172,6 +300,7 @@ export default function EquipoDetalle() {
           </div>
         </div>
 
+        {/* Modal transferir */}
         {showTransferir && (
           <div
             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
@@ -179,9 +308,32 @@ export default function EquipoDetalle() {
           >
             <div className="glass-card" style={{ borderRadius: 16, padding: 36, maxWidth: 380, width: "100%" }} onClick={(e) => e.stopPropagation()}>
               <h3 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 18, color: "white", marginBottom: 12 }}>👑 Transferir Capitanía</h3>
-              <p style={{ color: "#94A3B8", fontSize: 14, marginBottom: 20 }}>¿Estás seguro de que quieres transferir la capitanía? Esta acción no se puede deshacer.</p>
+              <p style={{ color: "#94A3B8", fontSize: 14, marginBottom: 20 }}>Selecciona el nuevo capitán:</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                {equipo.miembros.filter((m) => m.rol !== "CAPITAN").map((m) => (
+                  <div
+                    key={m.usuarioId}
+                    onClick={() => setNuevoCapitanId(m.usuarioId)}
+                    style={{
+                      padding: "12px 16px",
+                      borderRadius: 8,
+                      background: nuevoCapitanId === m.usuarioId ? "rgba(108,43,217,0.25)" : "rgba(108,43,217,0.1)",
+                      border: `2px solid ${nuevoCapitanId === m.usuarioId ? "#6C2BD9" : "rgba(108,43,217,0.25)"}`,
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white" }}>{m.gamertag || m.nombreUsuario}</span>
+                    <Badge estado={m.rol} />
+                  </div>
+                ))}
+              </div>
               <div style={{ display: "flex", gap: 12 }}>
-                <button className="btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => setShowTransferir(false)}>Confirmar</button>
+                <button className="btn-primary" style={{ flex: 1, justifyContent: "center", opacity: nuevoCapitanId ? 1 : 0.5 }} disabled={!nuevoCapitanId || ejecutando} onClick={confirmarTransferencia}>
+                  Confirmar
+                </button>
                 <button className="btn-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={() => setShowTransferir(false)}>Cancelar</button>
               </div>
             </div>

@@ -1,23 +1,74 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Badge from "../components/Badge";
-import { miEquipos, torneos, misPartidos } from "../data/mockData";
-
-const statCards = [
-  { label: "Torneos jugados", value: "5", icon: "🏆", color: "#6C2BD9" },
-  { label: "Partidos ganados", value: "8", icon: "⚔️", color: "#10B981" },
-  { label: "Ratio de victorias", value: "72%", icon: "📈", color: "#00D4FF" },
-  { label: "Premios ganados", value: "$250", icon: "💰", color: "#F59E0B" },
-];
+import { misEquipos } from "../api/equipoApi";
+import { listar } from "../api/torneoApi";
+import { misPartidos } from "../api/partidoApi";
+import type { EquipoResponse, TorneoResponse, UsuarioResponse } from "../types";
+import { usuarioStorage } from "../utils/apiClient";
 
 export default function Dashboard() {
-  const activeTorneos = torneos.filter((t) => t.estado === "EN_REGISTRO" || t.estado === "EN_CURSO").slice(0, 3);
+  const [usuario] = useState<UsuarioResponse | null>(() =>
+    usuarioStorage.get<UsuarioResponse>(),
+  );
+  const [equipos, setEquipos] = useState<EquipoResponse[]>([]);
+  const [torneos, setTorneos] = useState<TorneoResponse[]>([]);
+  const [partidos, setPartidos] = useState<Awaited<ReturnType<typeof misPartidos>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([misEquipos(), listar(), misPartidos()])
+      .then(([eq, tn, pt]) => {
+        if (!alive) return;
+        setEquipos(eq);
+        setTorneos(tn);
+        setPartidos(pt);
+      })
+      .catch((err: Error) => alive && setError(err.message))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const activeTorneos = torneos
+    .filter((t) => t.estado === "EN_REGISTRO" || t.estado === "EN_CURSO")
+    .slice(0, 3);
+
+  const solicitudesPendientes = equipos.reduce(
+    (acc, eq) => acc + eq.solicitudesPendientes.length,
+    0,
+  );
+
+  const statCards = [
+    { label: "Mis equipos", value: String(equipos.length), icon: "🛡️", color: "#6C2BD9" },
+    { label: "Torneos activos", value: String(activeTorneos.length || torneos.filter((t) => t.estado === "EN_REGISTRO" || t.estado === "EN_CURSO").length), icon: "🏆", color: "#00D4FF" },
+    { label: "Partidos programados", value: String(partidos.length), icon: "⚔️", color: "#F59E0B" },
+    { label: "Solicitudes pendientes", value: String(solicitudesPendientes), icon: "⏳", color: "#10B981" },
+  ];
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated username="lufero" />
+      <Navbar
+        authenticated
+        username={usuario?.nombreUsuario ?? ""}
+        isAdmin={usuario?.rol === "ADMIN"}
+      />
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
+        {/* Error */}
+        {error && (
+          <div
+            className="glass-card"
+            style={{ borderRadius: 12, padding: "16px 24px", marginBottom: 28, border: "1px solid rgba(239,68,68,0.35)" }}
+          >
+            <p style={{ color: "#F87171", fontSize: 14 }}>⚠️ {error}</p>
+          </div>
+        )}
+
         {/* Page header */}
         <div style={{ marginBottom: 36 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
@@ -32,15 +83,19 @@ export default function Dashboard() {
                 justifyContent: "center",
                 fontSize: 18,
                 fontWeight: 700,
+                color: "white",
               }}
             >
-              L
+              {(usuario?.nombreUsuario ?? "U")[0].toUpperCase()}
             </div>
             <div>
               <h1 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 24, color: "white" }}>
-                Bienvenido, <span style={{ background: "linear-gradient(135deg, #6C2BD9, #00D4FF)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>lufero</span>
+                Bienvenido,{" "}
+                <span style={{ background: "linear-gradient(135deg, #6C2BD9, #00D4FF)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  {usuario?.nombreUsuario ?? "..."}
+                </span>
               </h1>
-              <p style={{ color: "#64748B", fontSize: 14 }}>LuferoX • Gamertag activo</p>
+              <p style={{ color: "#64748B", fontSize: 14 }}>{usuario?.gamertag} • Gamertag activo</p>
             </div>
           </div>
         </div>
@@ -92,35 +147,45 @@ export default function Dashboard() {
               </Link>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {miEquipos.map((eq) => (
-                <Link
-                  key={eq.id}
-                  to={`/equipos/${eq.id}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <div
-                    style={{
-                      background: "rgba(108,43,217,0.08)",
-                      border: "1px solid rgba(108,43,217,0.18)",
-                      borderRadius: 10,
-                      padding: "14px 16px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      transition: "all 0.2s",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div>
-                      <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white", marginBottom: 3 }}>
-                        {eq.nombre}
-                      </p>
-                      <p style={{ color: "#64748B", fontSize: 12 }}>{eq.juego} · {eq.miembros.length} miembros</p>
+              {equipos.slice(0, 4).map((eq) => {
+                const miRol =
+                  eq.miembros.find((m) => m.usuarioId === usuario?.id)?.rol ??
+                  (eq.solicitudesPendientes.some((m) => m.usuarioId === usuario?.id)
+                    ? "SUPLENTE"
+                    : "JUGADOR");
+                return (
+                  <Link key={eq.id} to={`/equipos/${eq.id}`} style={{ textDecoration: "none" }}>
+                    <div
+                      style={{
+                        background: "rgba(108,43,217,0.08)",
+                        border: "1px solid rgba(108,43,217,0.18)",
+                        borderRadius: 10,
+                        padding: "14px 16px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        transition: "all 0.2s",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div>
+                        <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white", marginBottom: 3 }}>
+                          {eq.nombre}
+                        </p>
+                        <p style={{ color: "#64748B", fontSize: 12 }}>
+                          {eq.juegoPrincipal} · {eq.miembros.length} miembros
+                        </p>
+                      </div>
+                      <Badge estado={miRol} />
                     </div>
-                    <Badge estado={eq.rol} />
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
+              {!loading && equipos.length === 0 && (
+                <p style={{ color: "#64748B", fontSize: 13, textAlign: "center", padding: "16px 0" }}>
+                  Todavía no perteneces a ningún equipo.
+                </p>
+              )}
               <Link
                 to="/equipos"
                 style={{
@@ -175,13 +240,18 @@ export default function Dashboard() {
                         {t.nombre}
                       </p>
                       <p style={{ color: "#64748B", fontSize: 12 }}>
-                        {t.juego} · {t.equiposInscritos}/{t.limiteEquipos} equipos · {t.premio}
+                        {t.juego} · {t.equiposInscritos}/{t.limiteEquipos} equipos{t.premio ? ` · ${t.premio}` : ""}
                       </p>
                     </div>
                     <Badge estado={t.estado} />
                   </div>
                 </Link>
               ))}
+              {!loading && activeTorneos.length === 0 && (
+                <p style={{ color: "#64748B", fontSize: 13, textAlign: "center", padding: "16px 0" }}>
+                  No hay torneos activos por ahora.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -193,43 +263,52 @@ export default function Dashboard() {
               ⚔️ Mis Partidos
             </h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-            {misPartidos.map((p) => (
-              <div
-                key={p.id}
-                style={{
-                  background: "rgba(108,43,217,0.06)",
-                  border: "1px solid rgba(108,43,217,0.15)",
-                  borderRadius: 12,
-                  padding: "18px 20px",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                  <span style={{ color: "#64748B", fontSize: 11, fontFamily: "Montserrat, sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {p.ronda}
-                  </span>
-                  <Badge estado={p.estado} />
-                </div>
-                <div style={{ textAlign: "center", margin: "12px 0" }}>
-                  <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 13, color: "white", marginBottom: 4 }}>
-                    {p.equipo1}
-                  </p>
-                  <p style={{ color: "#6C2BD9", fontWeight: 700, fontSize: 11 }}>VS</p>
-                  <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 13, color: "white", marginTop: 4 }}>
-                    {p.equipo2}
-                  </p>
-                </div>
-                <p style={{ color: "#64748B", fontSize: 11, textAlign: "center", marginTop: 10 }}>
-                  📅 {new Date(p.fecha).toLocaleDateString("es", { day: "numeric", month: "short" })}
-                </p>
-                {p.ganador && (
-                  <p style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#10B981", fontWeight: 600 }}>
-                    Ganador: {p.ganador}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
+          {partidos.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+              {partidos.map((p) => (
+                <Link key={p.id} to={`/torneos/${p.torneoId}`} style={{ textDecoration: "none" }}>
+                  <div
+                    style={{
+                      background: "rgba(108,43,217,0.06)",
+                      border: "1px solid rgba(108,43,217,0.15)",
+                      borderRadius: 12,
+                      padding: "18px 20px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                      <span style={{ color: "#64748B", fontSize: 11, fontFamily: "Montserrat, sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        Ronda {p.ronda}
+                      </span>
+                      <Badge estado={p.estado} />
+                    </div>
+                    <div style={{ textAlign: "center", margin: "12px 0" }}>
+                      <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 13, color: "white", marginBottom: 4 }}>
+                        {p.equipo1?.nombre ?? "Por definir"}
+                      </p>
+                      <p style={{ color: "#6C2BD9", fontWeight: 700, fontSize: 11 }}>VS</p>
+                      <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 13, color: "white", marginTop: 4 }}>
+                        {p.equipo2?.nombre ?? "Por definir"}
+                      </p>
+                    </div>
+                    <p style={{ color: "#64748B", fontSize: 11, textAlign: "center", marginTop: 10 }}>
+                      📅 {p.fechaHora ? new Date(p.fechaHora).toLocaleDateString("es", { day: "numeric", month: "short" }) : "Por agendar"}
+                    </p>
+                    {p.ganador && (
+                      <p style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#10B981", fontWeight: 600 }}>
+                        Ganador: {p.ganador.nombre}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            !loading && (
+              <p style={{ color: "#64748B", fontSize: 14, textAlign: "center", padding: "24px 0" }}>
+                No tienes partidos pendientes. ¡Cuando tu equipo compita aparecerán aquí!
+              </p>
+            )
+          )}
         </div>
       </main>
     </div>

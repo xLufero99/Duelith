@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import TorneoCard from "../components/TorneoCard";
-import { torneos as allTorneos } from "../data/mockData";
+import { listar } from "../api/torneoApi";
+import type { EstadoTorneo, TorneoResponse } from "../types";
+import { tokenStorage, usuarioStorage } from "../utils/apiClient";
 
 const estados = ["Todos", "EN_REGISTRO", "EN_CURSO", "FINALIZADO", "CANCELADO"];
 const juegos = ["Todos", "Valorant", "League of Legends", "CS2", "Fortnite", "DOTA 2"];
@@ -11,17 +13,44 @@ export default function Torneos() {
   const [estadoFiltro, setEstadoFiltro] = useState("Todos");
   const [juegoFiltro, setJuegoFiltro] = useState("Todos");
   const [busqueda, setBusqueda] = useState("");
+  const [torneos, setTorneos] = useState<TorneoResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const filtered = allTorneos.filter((t) => {
-    const matchEstado = estadoFiltro === "Todos" || t.estado === estadoFiltro;
-    const matchJuego = juegoFiltro === "Todos" || t.juego === juegoFiltro;
-    const matchBusqueda = t.nombre.toLowerCase().includes(busqueda.toLowerCase());
-    return matchEstado && matchJuego && matchBusqueda;
-  });
+  const usuario = usuarioStorage.get<{ nombreUsuario: string; rol?: string }>();
+  const autenticado = !!tokenStorage.get();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    listar({
+      estado: estadoFiltro === "Todos" ? undefined : (estadoFiltro as EstadoTorneo),
+      juego: juegoFiltro === "Todos" ? undefined : juegoFiltro,
+    })
+      .then(setTorneos)
+      .catch((err: Error) => {
+        if (err.name !== "CanceledError") setError(err.message);
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [estadoFiltro, juegoFiltro]);
+
+  const filtered = useMemo(
+    () =>
+      torneos.filter((t) =>
+        t.nombre.toLowerCase().includes(busqueda.toLowerCase()),
+      ),
+    [torneos, busqueda],
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated username="lufero" />
+      <Navbar
+        authenticated={autenticado}
+        username={usuario?.nombreUsuario ?? ""}
+        isAdmin={usuario?.rol === "ADMIN"}
+      />
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
         {/* Header */}
@@ -31,12 +60,14 @@ export default function Torneos() {
               Torneos
             </h1>
             <p style={{ color: "#64748B", fontSize: 15 }}>
-              {filtered.length} torneo{filtered.length !== 1 ? "s" : ""} encontrado{filtered.length !== 1 ? "s" : ""}
+              {loading ? "Cargando..." : `${filtered.length} torneo${filtered.length !== 1 ? "s" : ""} encontrado${filtered.length !== 1 ? "s" : ""}`}
             </p>
           </div>
-          <Link to="/admin" className="btn-primary" style={{ textDecoration: "none", fontSize: 14 }}>
-            + Crear Torneo
-          </Link>
+          {autenticado && usuario?.rol === "ADMIN" && (
+            <Link to="/admin" className="btn-primary" style={{ textDecoration: "none", fontSize: 14 }}>
+              + Crear Torneo
+            </Link>
+          )}
         </div>
 
         {/* Filters */}
@@ -119,21 +150,34 @@ export default function Torneos() {
           </div>
         </div>
 
+        {/* Error */}
+        {error && (
+          <div
+            className="glass-card"
+            style={{ borderRadius: 12, padding: "16px 24px", marginBottom: 28, border: "1px solid rgba(239,68,68,0.35)" }}
+          >
+            <p style={{ color: "#F87171", fontSize: 14 }}>⚠️ {error}</p>
+          </div>
+        )}
+
         {/* Grid */}
-        {filtered.length > 0 ? (
+        {!error && filtered.length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
             {filtered.map((t) => (
               <TorneoCard key={t.id} torneo={t} />
             ))}
           </div>
         ) : (
-          <div style={{ textAlign: "center", padding: "80px 32px" }}>
-            <div style={{ fontSize: 56, marginBottom: 16 }}>🎮</div>
-            <h3 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 20, color: "white", marginBottom: 8 }}>
-              No hay torneos
-            </h3>
-            <p style={{ color: "#64748B", fontSize: 15 }}>Prueba con otros filtros de búsqueda.</p>
-          </div>
+          !loading &&
+          !error && (
+            <div style={{ textAlign: "center", padding: "80px 32px" }}>
+              <div style={{ fontSize: 56, marginBottom: 16 }}>🎮</div>
+              <h3 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 20, color: "white", marginBottom: 8 }}>
+                No hay torneos
+              </h3>
+              <p style={{ color: "#64748B", fontSize: 15 }}>Prueba con otros filtros de búsqueda.</p>
+            </div>
+          )
         )}
       </main>
     </div>

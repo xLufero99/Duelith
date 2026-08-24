@@ -1,18 +1,34 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { login as loginApi } from "../api/authApi";
+import { ApiError, tokenStorage, usuarioStorage } from "../utils/apiClient";
 
 export default function Login() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ identificador: "", contrasena: "" });
+  const [form, setForm] = useState({ identificador: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await loginApi(form);
+      tokenStorage.set(res.token);
+      usuarioStorage.set(res.usuario);
       navigate("/dashboard");
-    }, 900);
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 401
+          ? "Credenciales inválidas. Verifica tu usuario y contraseña."
+          : err instanceof Error
+            ? err.message
+            : "Error al iniciar sesión",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,6 +69,22 @@ export default function Login() {
             Inicia sesión para continuar compitiendo
           </p>
 
+          {error && (
+            <div
+              style={{
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.35)",
+                borderRadius: 8,
+                padding: "10px 14px",
+                color: "#F87171",
+                fontSize: 13,
+                marginBottom: 20,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div>
               <label style={{ display: "block", color: "#94A3B8", fontSize: 13, fontFamily: "Montserrat, sans-serif", fontWeight: 500, marginBottom: 8 }}>
@@ -75,8 +107,8 @@ export default function Login() {
                 className="input-field"
                 type="password"
                 placeholder="••••••••"
-                value={form.contrasena}
-                onChange={(e) => setForm({ ...form, contrasena: e.target.value })}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required
               />
             </div>

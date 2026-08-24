@@ -1,33 +1,64 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Badge from "../components/Badge";
-import { torneos, bracket } from "../data/mockData";
-
-const equiposInscritos = [
-  { id: 1, nombre: "Los Titanes", capitan: "lufero", miembros: 5, fechaInscripcion: "2026-08-10" },
-  { id: 2, nombre: "Dark Forces", capitan: "shadowboss", miembros: 5, fechaInscripcion: "2026-08-11" },
-  { id: 3, nombre: "Neon Hawks", capitan: "neon_pro", miembros: 5, fechaInscripcion: "2026-08-12" },
-  { id: 4, nombre: "Alpha Squad", capitan: "alpha_king", miembros: 5, fechaInscripcion: "2026-08-13" },
-  { id: 5, nombre: "Shadow Wolves", capitan: "wolf_x", miembros: 5, fechaInscripcion: "2026-08-14" },
-];
-
-const partidos = [
-  { id: 1, equipo1: "Los Titanes", equipo2: "Dark Forces", ronda: "Cuartos de Final", estado: "FINALIZADO", ganador: "Los Titanes" },
-  { id: 2, equipo1: "Neon Hawks", equipo2: "Shadow Wolves", ronda: "Cuartos de Final", estado: "FINALIZADO", ganador: "Neon Hawks" },
-  { id: 3, equipo1: "Alpha Squad", equipo2: "Crimson Blade", ronda: "Cuartos de Final", estado: "PENDIENTE", ganador: null },
-  { id: 4, equipo1: "Storm Riders", equipo2: "Ghost Protocol", ronda: "Cuartos de Final", estado: "EN_JUEGO", ganador: null },
-  { id: 5, equipo1: "Los Titanes", equipo2: "Neon Hawks", ronda: "Semifinal", estado: "PENDIENTE", ganador: null },
-];
+import {
+  cerrarInscripciones,
+  generarBracket,
+  inscribirEquipo,
+  obtenerBracket,
+  obtenerDetalle,
+} from "../api/torneoApi";
+import { listarPorTorneo, reportarResultado } from "../api/partidoApi";
+import { misEquipos } from "../api/equipoApi";
+import type {
+  BracketResponse,
+  EquipoResponse,
+  PartidoResponse,
+  TorneoDetalleResponse,
+} from "../types";
+import { tokenStorage, usuarioStorage } from "../utils/apiClient";
 
 const tabs = ["Información", "Equipos", "Bracket", "Partidos"];
 
-interface ReportarModalProps {
-  onClose: () => void;
+function nombreRonda(numero: number, total: number): string {
+  if (numero === total && total > 0) return "Final";
+  if (numero === total - 1) return "Semifinal";
+  if (numero === total - 2) return "Cuartos de Final";
+  return `Ronda ${numero}`;
 }
 
-function ReportarModal({ onClose }: ReportarModalProps) {
-  const [ganador, setGanador] = useState("");
+interface ReportarModalProps {
+  partido: PartidoResponse;
+  onClose: () => void;
+  onConfirm: (ganadorId: number, marcador?: string) => Promise<void>;
+}
+
+function ReportarModal({ partido, onClose, onConfirm }: ReportarModalProps) {
+  const [ganadorId, setGanadorId] = useState<number | null>(null);
+  const [marcador, setMarcador] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const opciones = [
+    { id: partido.equipo1?.id, nombre: partido.equipo1?.nombre },
+    { id: partido.equipo2?.id, nombre: partido.equipo2?.nombre },
+  ].filter((o): o is { id: number; nombre: string } => o.id != null);
+
+  const confirmar = async () => {
+    if (!ganadorId) return;
+    setLoading(true);
+    setError("");
+    try {
+      await onConfirm(ganadorId, marcador.trim() || undefined);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo reportar el resultado");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -55,18 +86,21 @@ function ReportarModal({ onClose }: ReportarModalProps) {
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748B", fontSize: 20, cursor: "pointer" }}>✕</button>
         </div>
         <p style={{ color: "#94A3B8", fontSize: 14, marginBottom: 24 }}>
-          Selecciona el equipo ganador del partido: <strong style={{ color: "white" }}>Los Titanes vs Neon Hawks</strong>
+          Selecciona el equipo ganador del partido:{" "}
+          <strong style={{ color: "white" }}>
+            {partido.equipo1?.nombre ?? "Por definir"} vs {partido.equipo2?.nombre ?? "Por definir"}
+          </strong>
         </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
-          {["Los Titanes", "Neon Hawks"].map((eq) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+          {opciones.map((op) => (
             <button
-              key={eq}
-              onClick={() => setGanador(eq)}
+              key={op.id}
+              onClick={() => setGanadorId(op.id)}
               style={{
                 padding: "14px 20px",
                 borderRadius: 10,
-                border: `2px solid ${ganador === eq ? "#6C2BD9" : "rgba(108,43,217,0.2)"}`,
-                background: ganador === eq ? "rgba(108,43,217,0.2)" : "rgba(22,33,62,0.5)",
+                border: `2px solid ${ganadorId === op.id ? "#6C2BD9" : "rgba(108,43,217,0.2)"}`,
+                background: ganadorId === op.id ? "rgba(108,43,217,0.2)" : "rgba(22,33,62,0.5)",
                 color: "white",
                 fontFamily: "Montserrat, sans-serif",
                 fontWeight: 600,
@@ -79,14 +113,29 @@ function ReportarModal({ onClose }: ReportarModalProps) {
                 gap: 10,
               }}
             >
-              {ganador === eq && <span style={{ color: "#10B981" }}>✓</span>}
-              {eq}
+              {ganadorId === op.id && <span style={{ color: "#10B981" }}>✓</span>}
+              {op.nombre}
             </button>
           ))}
         </div>
+        <input
+          className="input-field"
+          placeholder="Marcador (opcional, ej: 13-7)"
+          value={marcador}
+          onChange={(e) => setMarcador(e.target.value)}
+          style={{ marginBottom: 20 }}
+        />
+        {error && (
+          <p style={{ color: "#F87171", fontSize: 13, marginBottom: 16 }}>{error}</p>
+        )}
         <div style={{ display: "flex", gap: 12 }}>
-          <button className="btn-primary" style={{ flex: 1, justifyContent: "center", opacity: ganador ? 1 : 0.5 }} disabled={!ganador} onClick={onClose}>
-            Confirmar resultado
+          <button
+            className="btn-primary"
+            style={{ flex: 1, justifyContent: "center", opacity: ganadorId && !loading ? 1 : 0.5 }}
+            disabled={!ganadorId || loading}
+            onClick={confirmar}
+          >
+            {loading ? "Reportando..." : "Confirmar resultado"}
           </button>
           <button className="btn-secondary" onClick={onClose} style={{ flex: 1, justifyContent: "center" }}>
             Cancelar
@@ -97,24 +146,42 @@ function ReportarModal({ onClose }: ReportarModalProps) {
   );
 }
 
-function BracketView() {
-  const [showModal, setShowModal] = useState(false);
+interface PropsBracket {
+  bracket: BracketResponse | null;
+  puedeReportar: boolean;
+  onReportar: (p: PartidoResponse) => void;
+}
+
+function BracketView({ bracket, puedeReportar, onReportar }: PropsBracket) {
+  if (!bracket || bracket.rondas.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "40px 0" }}>
+        <div style={{ fontSize: 44, marginBottom: 12 }}>🗺️</div>
+        <h3 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 16, color: "white", marginBottom: 6 }}>
+          Bracket no generado
+        </h3>
+        <p style={{ color: "#64748B", fontSize: 14 }}>
+          El bracket aparecerá cuando un administrador lo genere.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
-      {showModal && <ReportarModal onClose={() => setShowModal(false)} />}
       <div style={{ overflowX: "auto", padding: "8px 0" }}>
         <div style={{ display: "flex", gap: 0, minWidth: 700, alignItems: "center" }}>
           {bracket.rondas.map((ronda, ri) => (
-            <div key={ronda.nombre} style={{ display: "flex", alignItems: "center" }}>
+            <div key={ronda.numeroRonda} style={{ display: "flex", alignItems: "center" }}>
               <div style={{ minWidth: 180, padding: "0 12px" }}>
                 <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 11, color: "#6C2BD9", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16, textAlign: "center" }}>
-                  {ronda.nombre}
+                  {nombreRonda(ronda.numeroRonda, bracket.totalRondas)}
                 </p>
                 <div
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: ri === 0 ? 12 : ri === 1 ? 60 : 0,
+                    gap: ri === 0 ? 12 : ri === 1 ? 60 : 24,
                     justifyContent: "center",
                     minHeight: ri === 0 ? "auto" : ri === 1 ? 300 : 400,
                   }}
@@ -129,27 +196,29 @@ function BracketView() {
                         overflow: "hidden",
                       }}
                     >
-                      {[partido.equipo1, partido.equipo2].map((eq, ei) => (
+                      {[partido.equipo1?.nombre ?? "Por definir", partido.equipo2?.nombre ?? "Por definir"].map((eqNombre, ei) => (
                         <div
                           key={ei}
                           style={{
                             padding: "10px 14px",
-                            background: partido.ganador === eq ? "rgba(108,43,217,0.2)" : "transparent",
+                            background: partido.ganador?.nombre === eqNombre ? "rgba(108,43,217,0.2)" : "transparent",
                             borderBottom: ei === 0 ? "1px solid rgba(108,43,217,0.2)" : "none",
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
                           }}
                         >
-                          <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: partido.ganador === eq ? 700 : 400, fontSize: 12, color: partido.ganador === eq ? "white" : "#94A3B8" }}>
-                            {eq}
+                          <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: partido.ganador?.nombre === eqNombre ? 700 : 400, fontSize: 12, color: partido.ganador?.nombre === eqNombre ? "white" : "#94A3B8" }}>
+                            {eqNombre}
                           </span>
-                          {partido.ganador === eq && <span style={{ color: "#10B981", fontSize: 12 }}>✓</span>}
+                          {partido.marcador && (
+                            <span style={{ color: "#00D4FF", fontSize: 11, fontWeight: 700 }}>{partido.marcador}</span>
+                          )}
                         </div>
                       ))}
-                      {partido.estado === "PENDIENTE" && (
+                      {puedeReportar && partido.estado !== "FINALIZADO" && partido.estado !== "WALKOVER" && (
                         <button
-                          onClick={() => setShowModal(true)}
+                          onClick={() => onReportar(partido)}
                           style={{
                             width: "100%",
                             padding: "6px",
@@ -186,15 +255,121 @@ function BracketView() {
 
 export default function TorneoDetalle() {
   const { id } = useParams();
+  const torneoId = Number(id);
   const [activeTab, setActiveTab] = useState("Información");
   const [inscribirOpen, setInscribirOpen] = useState(false);
-  const torneo = torneos.find((t) => t.id === Number(id)) ?? torneos[0];
-  const pct = Math.round((torneo.equiposInscritos / torneo.limiteEquipos) * 100);
+  const [torneo, setTorneo] = useState<TorneoDetalleResponse | null>(null);
+  const [bracket, setBracket] = useState<BracketResponse | null>(null);
+  const [partidosTorneo, setPartidosTorneo] = useState<PartidoResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [accionMsg, setAccionMsg] = useState("");
+
+  const usuario = usuarioStorage.get<{ id: number; rol: string }>();
+  const autenticado = !!tokenStorage.get();
+  const esAdmin = usuario?.rol === "ADMIN";
+
+  const cargarTodo = useCallback(async () => {
+    try {
+      const [detalle, brkt, parts] = await Promise.all([
+        obtenerDetalle(torneoId),
+        obtenerBracket(torneoId),
+        listarPorTorneo(torneoId),
+      ]);
+      setTorneo(detalle);
+      setBracket(brkt);
+      setPartidosTorneo(parts);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar el torneo");
+    } finally {
+      setLoading(false);
+    }
+  }, [torneoId]);
+
+  useEffect(() => {
+    setLoading(true);
+    cargarTodo();
+  }, [cargarTodo]);
+
+  // ---- Acciones ----
+  const [misEquiposLista, setMisEquiposLista] = useState<EquipoResponse[]>([]);
+
+  const abrirModalInscripcion = async () => {
+    setAccionMsg("");
+    setInscribirOpen(true);
+    try {
+      setMisEquiposLista(await misEquipos());
+    } catch (err) {
+      setAccionMsg(err instanceof Error ? err.message : "Error al cargar tus equipos");
+    }
+  };
+
+  const [equipoSeleccionado, setEquipoSeleccionado] = useState<number | null>(null);
+  const [inscribiendo, setInscribiendo] = useState(false);
+  const [inscripcionError, setInscripcionError] = useState("");
+
+  const confirmarInscripcion = async () => {
+    if (!equipoSeleccionado) return;
+    setInscribiendo(true);
+    setInscripcionError("");
+    try {
+      const res = await inscribirEquipo(torneoId, { equipoId: equipoSeleccionado });
+      setAccionMsg(res.mensaje);
+      setInscribirOpen(false);
+      setEquipoSeleccionado(null);
+      await cargarTodo();
+    } catch (err) {
+      setInscripcionError(err instanceof Error ? err.message : "No se pudo inscribir");
+    } finally {
+      setInscribiendo(false);
+    }
+  };
+
+  const [ejecutando, setEjecutando] = useState(false);
+
+  const ejecutarAdmin = async (accion: () => Promise<unknown>) => {
+    setEjecutando(true);
+    setAccionMsg("");
+    setError("");
+    try {
+      const res = await accion();
+      setAccionMsg((res as { mensaje?: string } | null)?.mensaje ?? "Operación realizada");
+      await cargarTodo();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Acción fallida");
+    } finally {
+      setEjecutando(false);
+    }
+  };
+
+  const [partidoAReportar, setPartidoAReportar] = useState<PartidoResponse | null>(null);
+
+  const confirmarResultado = async (ganadorId: number, marcador?: string) => {
+    if (!partidoAReportar) return;
+    await reportarResultado(partidoAReportar.id, { ganadorId, ...(marcador ? { marcador } : {}) });
+    await cargarTodo();
+  };
+
+  const pct = torneo ? Math.round((torneo.equiposInscritos / torneo.limiteEquipos) * 100) : 0;
+
+  if (loading && !torneo) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0A0A0F", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "#94A3B8", fontSize: 15 }}>Cargando torneo...</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated username="lufero" />
+      <Navbar
+        authenticated={autenticado}
+        username={usuarioStorage.get<{ nombreUsuario: string }>()?.nombreUsuario ?? ""}
+        isAdmin={esAdmin}
+      />
 
+      {/* Modal inscribir */}
       {inscribirOpen && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
@@ -202,21 +377,65 @@ export default function TorneoDetalle() {
         >
           <div className="glass-card" style={{ borderRadius: 16, padding: 36, maxWidth: 400, width: "100%" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 20, color: "white", marginBottom: 16 }}>Inscribir Equipo</h3>
-            <p style={{ color: "#94A3B8", fontSize: 14, marginBottom: 20 }}>Selecciona el equipo que deseas inscribir en <strong style={{ color: "white" }}>{torneo.nombre}</strong>:</p>
+            <p style={{ color: "#94A3B8", fontSize: 14, marginBottom: 20 }}>Selecciona el equipo que deseas inscribir en <strong style={{ color: "white" }}>{torneo?.nombre}</strong>:</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-              {[{ id: 1, nombre: "Los Titanes", juego: "Valorant" }, { id: 2, nombre: "Dark Forces", juego: "CS2" }].map((eq) => (
-                <div key={eq.id} style={{ padding: "12px 16px", borderRadius: 8, background: "rgba(108,43,217,0.12)", border: "1px solid rgba(108,43,217,0.25)", cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white" }}>{eq.nombre}</span>
-                  <span style={{ color: "#64748B", fontSize: 13 }}>{eq.juego}</span>
-                </div>
-              ))}
+              {(() => {
+                const inscritos = new Set(torneo?.equiposInscritosDetalle.map((e) => e.id) ?? []);
+                const disponibles = misEquiposLista.filter(
+                  (eq) => !inscritos.has(eq.id) && eq.juegoPrincipal.toLowerCase() === (torneo?.juego ?? "").toLowerCase(),
+                );
+                if (disponibles.length === 0) {
+                  return (
+                    <p style={{ color: "#64748B", fontSize: 13, textAlign: "center", padding: "12px 0" }}>
+                      No tienes equipos de {torneo?.juego} disponibles para inscribir.
+                    </p>
+                  );
+                }
+                return disponibles.map((eq) => (
+                  <div
+                    key={eq.id}
+                    onClick={() => setEquipoSeleccionado(eq.id)}
+                    style={{
+                      padding: "12px 16px",
+                      borderRadius: 8,
+                      background: equipoSeleccionado === eq.id ? "rgba(108,43,217,0.25)" : "rgba(108,43,217,0.12)",
+                      border: `2px solid ${equipoSeleccionado === eq.id ? "#6C2BD9" : "rgba(108,43,217,0.25)"}`,
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white" }}>{eq.nombre}</span>
+                    <span style={{ color: "#64748B", fontSize: 13 }}>{eq.juegoPrincipal}</span>
+                  </div>
+                ));
+              })()}
             </div>
+            {inscripcionError && (
+              <p style={{ color: "#F87171", fontSize: 13, marginBottom: 16 }}>{inscripcionError}</p>
+            )}
             <div style={{ display: "flex", gap: 12 }}>
-              <button className="btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => setInscribirOpen(false)}>Inscribir</button>
+              <button
+                className="btn-primary"
+                style={{ flex: 1, justifyContent: "center", opacity: equipoSeleccionado && !inscribiendo ? 1 : 0.5 }}
+                disabled={!equipoSeleccionado || inscribiendo}
+                onClick={confirmarInscripcion}
+              >
+                {inscribiendo ? "Inscribiendo..." : "Inscribir"}
+              </button>
               <button className="btn-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={() => setInscribirOpen(false)}>Cancelar</button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal reportar */}
+      {partidoAReportar && (
+        <ReportarModal
+          partido={partidoAReportar}
+          onClose={() => setPartidoAReportar(null)}
+          onConfirm={confirmarResultado}
+        />
       )}
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
@@ -224,8 +443,20 @@ export default function TorneoDetalle() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, fontSize: 13, color: "#64748B" }}>
           <Link to="/torneos" style={{ color: "#94A3B8", textDecoration: "none" }}>Torneos</Link>
           <span>›</span>
-          <span style={{ color: "white" }}>{torneo.nombre}</span>
+          <span style={{ color: "white" }}>{torneo?.nombre}</span>
         </div>
+
+        {/* Mensajes */}
+        {error && (
+          <div className="glass-card" style={{ borderRadius: 12, padding: "16px 24px", marginBottom: 20, border: "1px solid rgba(239,68,68,0.35)" }}>
+            <p style={{ color: "#F87171", fontSize: 14 }}>⚠️ {error}</p>
+          </div>
+        )}
+        {accionMsg && (
+          <div className="glass-card" style={{ borderRadius: 12, padding: "16px 24px", marginBottom: 20, border: "1px solid rgba(16,185,129,0.35)" }}>
+            <p style={{ color: "#34D399", fontSize: 14 }}>✓ {accionMsg}</p>
+          </div>
+        )}
 
         {/* Tournament header */}
         <div
@@ -242,20 +473,28 @@ export default function TorneoDetalle() {
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 28 }}>🏆</span>
                 <h1 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 800, fontSize: 26, color: "white" }}>
-                  {torneo.nombre}
+                  {torneo?.nombre}
                 </h1>
-                <Badge estado={torneo.estado} />
+                <Badge estado={torneo?.estado ?? ""} />
               </div>
               <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
-                <span style={{ color: "#94A3B8", fontSize: 14 }}>🎮 {torneo.juego}</span>
-                <span style={{ color: "#94A3B8", fontSize: 14 }}>👥 {torneo.equiposInscritos}/{torneo.limiteEquipos} equipos</span>
-                <span style={{ color: "#94A3B8", fontSize: 14 }}>📅 {new Date(torneo.fechaInicio).toLocaleDateString("es")} – {new Date(torneo.fechaFin).toLocaleDateString("es")}</span>
-                <span style={{ color: "#F59E0B", fontSize: 14, fontWeight: 600 }}>💰 {torneo.premio}</span>
+                <span style={{ color: "#94A3B8", fontSize: 14 }}>🎮 {torneo?.juego}</span>
+                <span style={{ color: "#94A3B8", fontSize: 14 }}>👥 {torneo?.equiposInscritos}/{torneo?.limiteEquipos} equipos</span>
+                {torneo?.fechaInicio && torneo?.fechaFin && (
+                  <span style={{ color: "#94A3B8", fontSize: 14 }}>
+                    📅 {new Date(torneo.fechaInicio).toLocaleDateString("es")} – {new Date(torneo.fechaFin).toLocaleDateString("es")}
+                  </span>
+                )}
+                {torneo?.premio && (
+                  <span style={{ color: "#F59E0B", fontSize: 14, fontWeight: 600 }}>💰 {torneo.premio}</span>
+                )}
               </div>
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: "#64748B" }}>Equipos inscritos</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: pct >= 100 ? "#EF4444" : "#10B981" }}>{torneo.equiposInscritos}/{torneo.limiteEquipos}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: pct >= 100 ? "#EF4444" : "#10B981" }}>
+                    {torneo?.equiposInscritos}/{torneo?.limiteEquipos}
+                  </span>
                 </div>
                 <div style={{ height: 6, background: "#1A1A2E", borderRadius: 4, overflow: "hidden", maxWidth: 300 }}>
                   <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #6C2BD9, #00D4FF)", borderRadius: 4 }} />
@@ -263,11 +502,19 @@ export default function TorneoDetalle() {
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {torneo.estado === "EN_REGISTRO" && (
-                <button className="btn-primary" onClick={() => setInscribirOpen(true)}>+ Inscribir Equipo</button>
+              {autenticado && torneo?.estado === "EN_REGISTRO" && (
+                <button className="btn-primary" onClick={abrirModalInscripcion}>+ Inscribir Equipo</button>
               )}
-              <button className="btn-secondary">Cerrar inscripciones</button>
-              <button className="btn-secondary">⚡ Generar Bracket</button>
+              {esAdmin && torneo?.estado === "EN_REGISTRO" && (
+                <button className="btn-secondary" disabled={ejecutando} onClick={() => ejecutarAdmin(() => cerrarInscripciones(torneoId))}>
+                  Cerrar inscripciones
+                </button>
+              )}
+              {esAdmin && (torneo?.estado === "INSCRIPCIONES_CERRADAS") && (
+                <button className="btn-secondary" disabled={ejecutando} onClick={() => ejecutarAdmin(() => generarBracket(torneoId))}>
+                  ⚡ Generar Bracket
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -293,12 +540,12 @@ export default function TorneoDetalle() {
               <h3 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 18, color: "white", marginBottom: 16 }}>
                 Sobre el torneo
               </h3>
-              <p style={{ color: "#94A3B8", fontSize: 15, lineHeight: 1.7, marginBottom: 28 }}>{torneo.descripcion}</p>
+              <p style={{ color: "#94A3B8", fontSize: 15, lineHeight: 1.7, marginBottom: 28 }}>{torneo?.descripcion || "Sin descripción."}</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
                 {[
-                  { label: "Fecha de inicio", value: new Date(torneo.fechaInicio).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" }), icon: "📅" },
-                  { label: "Fecha de cierre", value: new Date(torneo.fechaFin).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" }), icon: "🏁" },
-                  { label: "Premio total", value: torneo.premio, icon: "💰" },
+                  { label: "Fecha de inicio", value: torneo?.fechaInicio ? new Date(torneo.fechaInicio).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" }) : "—", icon: "📅" },
+                  { label: "Fecha de cierre", value: torneo?.fechaFin ? new Date(torneo.fechaFin).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" }) : "—", icon: "🏁" },
+                  { label: "Premio total", value: torneo?.premio || "—", icon: "💰" },
                 ].map((item) => (
                   <div key={item.label} style={{ background: "rgba(108,43,217,0.08)", border: "1px solid rgba(108,43,217,0.18)", borderRadius: 12, padding: "20px 24px" }}>
                     <p style={{ fontSize: 22, marginBottom: 8 }}>{item.icon}</p>
@@ -314,71 +561,101 @@ export default function TorneoDetalle() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                 <h3 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 18, color: "white" }}>
-                  Equipos Inscritos ({equiposInscritos.length})
+                  Equipos Inscritos ({torneo?.equiposInscritosDetalle.length ?? 0})
                 </h3>
-                <input className="input-field" placeholder="🔍 Buscar equipo..." style={{ maxWidth: 220 }} />
+                <input className="input-field" placeholder="🔍 Buscar equipo..." style={{ maxWidth: 220 }} disabled />
               </div>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {["#", "Equipo", "Capitán", "Miembros", "Fecha inscripción"].map((h) => (
-                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid rgba(108,43,217,0.15)" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {equiposInscritos.map((eq, i) => (
-                    <tr key={eq.id} style={{ borderBottom: "1px solid rgba(108,43,217,0.08)", transition: "background 0.2s" }}>
-                      <td style={{ padding: "14px 16px", color: "#64748B", fontSize: 14 }}>{i + 1}</td>
-                      <td style={{ padding: "14px 16px" }}>
-                        <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white" }}>{eq.nombre}</span>
-                      </td>
-                      <td style={{ padding: "14px 16px", color: "#94A3B8", fontSize: 14 }}>{eq.capitan}</td>
-                      <td style={{ padding: "14px 16px", color: "#94A3B8", fontSize: 14 }}>{eq.miembros}</td>
-                      <td style={{ padding: "14px 16px", color: "#64748B", fontSize: 13 }}>{new Date(eq.fechaInscripcion).toLocaleDateString("es")}</td>
+              {(torneo?.equiposInscritosDetalle.length ?? 0) > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      {["#", "Equipo", "Capitán", "Juego", "Fundado"].map((h) => (
+                        <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid rgba(108,43,217,0.15)" }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {torneo!.equiposInscritosDetalle.map((eq, i) => (
+                      <tr key={eq.id} style={{ borderBottom: "1px solid rgba(108,43,217,0.08)", transition: "background 0.2s" }}>
+                        <td style={{ padding: "14px 16px", color: "#64748B", fontSize: 14 }}>{i + 1}</td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <Link to={`/equipos/${eq.id}`} style={{ textDecoration: "none" }}>
+                            <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 14, color: "white" }}>{eq.nombre}</span>
+                          </Link>
+                        </td>
+                        <td style={{ padding: "14px 16px", color: "#94A3B8", fontSize: 14 }}>{eq.capitanNombre}</td>
+                        <td style={{ padding: "14px 16px", color: "#94A3B8", fontSize: 14 }}>{eq.juegoPrincipal}</td>
+                        <td style={{ padding: "14px 16px", color: "#64748B", fontSize: 13 }}>{new Date(eq.creadoEn).toLocaleDateString("es")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: "#64748B", fontSize: 14, textAlign: "center", padding: "24px 0" }}>
+                  Aún no hay equipos inscritos en este torneo.
+                </p>
+              )}
             </div>
           )}
 
-          {activeTab === "Bracket" && <BracketView />}
+          {activeTab === "Bracket" && (
+            <BracketView
+              bracket={bracket}
+              puedeReportar={autenticado}
+              onReportar={(p) => setPartidoAReportar(p)}
+            />
+          )}
 
           {activeTab === "Partidos" && (
             <div>
               <h3 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 18, color: "white", marginBottom: 20 }}>Partidos del Torneo</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {partidos.map((p) => (
-                  <div
-                    key={p.id}
-                    style={{
-                      background: "rgba(108,43,217,0.06)",
-                      border: "1px solid rgba(108,43,217,0.15)",
-                      borderRadius: 12,
-                      padding: "18px 24px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                      gap: 12,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      <span style={{ color: "#64748B", fontSize: 12, fontFamily: "Montserrat, sans-serif", fontWeight: 600, textTransform: "uppercase", minWidth: 100 }}>{p.ronda}</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 14, color: p.ganador === p.equipo1 ? "white" : "#94A3B8" }}>{p.equipo1}</span>
-                        <span style={{ color: "#6C2BD9", fontWeight: 800, fontSize: 12 }}>VS</span>
-                        <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 14, color: p.ganador === p.equipo2 ? "white" : "#94A3B8" }}>{p.equipo2}</span>
+              {partidosTorneo.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {partidosTorneo.map((p) => (
+                    <div
+                      key={p.id}
+                      style={{
+                        background: "rgba(108,43,217,0.06)",
+                        border: "1px solid rgba(108,43,217,0.15)",
+                        borderRadius: 12,
+                        padding: "18px 24px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                        <span style={{ color: "#64748B", fontSize: 12, fontFamily: "Montserrat, sans-serif", fontWeight: 600, textTransform: "uppercase", minWidth: 100 }}>
+                          {nombreRonda(p.ronda, bracket?.totalRondas ?? p.ronda)}
+                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 14, color: p.ganador?.id === p.equipo1?.id ? "white" : "#94A3B8" }}>
+                            {p.equipo1?.nombre ?? "Por definir"}
+                          </span>
+                          <span style={{ color: "#6C2BD9", fontWeight: 800, fontSize: 12 }}>
+                            {p.marcador ? p.marcador : "VS"}
+                          </span>
+                          <span style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 14, color: p.ganador?.id === p.equipo2?.id ? "white" : "#94A3B8" }}>
+                            {p.equipo2?.nombre ?? "Por definir"}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        {p.ganador && (
+                          <span style={{ color: "#10B981", fontSize: 12, fontWeight: 600 }}>Ganador: {p.ganador.nombre}</span>
+                        )}
+                        <Badge estado={p.estado} />
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      {p.ganador && <span style={{ color: "#10B981", fontSize: 12, fontWeight: 600 }}>Ganador: {p.ganador}</span>}
-                      <Badge estado={p.estado} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: "#64748B", fontSize: 14, textAlign: "center", padding: "24px 0" }}>
+                  Todavía no hay partidos generados para este torneo.
+                </p>
+              )}
             </div>
           )}
         </div>
