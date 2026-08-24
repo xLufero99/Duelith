@@ -23,7 +23,9 @@ public class CorsConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.stream(allowedOriginsRaw.split(","))
+        // Origin patterns (no setAllowedOrigins): soporta wildcards como
+        // https://*.railway.app y tambien origenes exactos.
+        config.setAllowedOriginPatterns(Arrays.stream(allowedOriginsRaw.split(","))
                 .map(String::trim)
                 .filter(o -> !o.isEmpty())
                 .toList());
