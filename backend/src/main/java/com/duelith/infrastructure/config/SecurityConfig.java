@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -23,11 +24,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 /**
  * Configuracion de seguridad: API stateless con JWT.
  * - Publico: registro/login, consulta de torneos/brackets y Swagger.
- * - Solo ADMIN: crear torneos, cerrar inscripciones, generar brackets.
- * - Resto: requiere token valido.
+ * - JUGADOR o CAPITAN: crear equipos; el capitan gestiona su equipo (validado en servicios).
+ * - ORGANIZADOR: crear torneos y editar/borrar SOLO los suyos (@IsCreator).
+ * - ADMIN: control total.
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -82,13 +85,24 @@ public class SecurityConfig {
                         .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Autenticacion
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                        // Consultas publicas de torneos, brackets y partidos
-                        .requestMatchers(HttpMethod.GET,
-                                "/api/torneos", "/api/torneos/*",
-                                "/api/torneos/*/bracket", "/api/torneos/*/partidos").permitAll()
-                        // Operaciones exclusivas de ADMIN
-                        .requestMatchers(HttpMethod.POST, "/api/torneos").hasRole("ADMIN")
-                        .requestMatchers("/api/torneos/*/cerrar", "/api/torneos/*/bracket").hasRole("ADMIN")
+                        // Convertirse en organizador: cualquier usuario autenticado
+                        .requestMatchers("/api/auth/convertir-organizador").authenticated()
+                        // Mis torneos: autenticado (debe ir ANTES del GET publico general)
+                        .requestMatchers("/api/torneos/mis-torneos").authenticated()
+                        // Consultas de torneos, brackets y partidos: publicas
+                        .requestMatchers(HttpMethod.GET, "/api/torneos/**").permitAll()
+                        // Crear torneo: ORGANIZADOR o ADMIN
+                        .requestMatchers(HttpMethod.POST, "/api/torneos").hasAnyRole("ORGANIZADOR", "ADMIN")
+                        // Cerrar inscripciones y generar bracket: ORGANIZADOR o ADMIN
+                        .requestMatchers(HttpMethod.POST, "/api/torneos/*/cerrar", "/api/torneos/*/bracket")
+                        .hasAnyRole("ORGANIZADOR", "ADMIN")
+                        // Editar/borrar torneo: la propiedad se valida con @IsCreator
+                        .requestMatchers(HttpMethod.PUT, "/api/torneos/*").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/torneos/*").authenticated()
+                        // Panel de administracion: solo ADMIN
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // Crear equipo: JUGADOR o CAPITAN
+                        .requestMatchers(HttpMethod.POST, "/api/equipos").hasAnyRole("JUGADOR", "CAPITAN")
                         // Resto de la API autenticada
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())

@@ -19,6 +19,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,10 +41,12 @@ public class EquipoController {
     private final EquipoServicePort equipoService;
 
     @PostMapping
-    @Operation(summary = "Crear equipo", description = "El usuario autenticado queda como capitan del nuevo equipo.")
+    @PreAuthorize("hasAnyRole('JUGADOR', 'CAPITAN')")
+    @Operation(summary = "Crear equipo", description = "Solo JUGADOR o CAPITAN. El usuario autenticado queda como capitan del nuevo equipo.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Equipo creado",
                     content = @Content(schema = @Schema(implementation = EquipoResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Requiere rol JUGADOR o CAPITAN"),
             @ApiResponse(responseCode = "409", description = "Nombre de equipo ya existe")
     })
     public ResponseEntity<EquipoResponse> crear(@CurrentUser UserPrincipal actual,

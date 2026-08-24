@@ -26,4 +26,6 @@ public interface TorneoJpaRepository extends JpaRepository<Torneo, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM Torneo t WHERE t.id = :id")
     Optional<Torneo> findByIdConBloqueo(@Param("id") Long id);
+
+    List<Torneo> findByCreadoPorIdOrderByCreadoEnDesc(Long creadoPorId);
 }

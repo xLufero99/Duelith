@@ -12,6 +12,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -54,6 +55,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> manejarAccesoDenegado(AccesoDenegadoException ex,
                                                                HttpServletRequest request) {
         return construir(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
+    }
+
+    /** Denegaciones de @PreAuthorize/@IsCreator (AuthorizationDeniedException incluida) -> 403. */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> manejarAccesoDenegadoSpring(AccessDeniedException ex,
+                                                                     HttpServletRequest request) {
+        log.warn("Acceso denegado a {} {}: {}", request.getMethod(), request.getRequestURI(),
+                ex.getMessage());
+        return construir(HttpStatus.FORBIDDEN, "No tienes permisos para esta operacion", request, null);
     }
 
     /** Errores de @Valid en DTOs: se agrupan por campo. */

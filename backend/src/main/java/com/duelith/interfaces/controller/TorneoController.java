@@ -7,9 +7,11 @@ import com.duelith.application.dto.response.MessageResponse;
 import com.duelith.application.dto.response.TorneoDetalleResponse;
 import com.duelith.application.dto.response.TorneoResponse;
 import com.duelith.domain.model.EstadoTorneo;
+import com.duelith.domain.model.RolUsuario;
 import com.duelith.domain.service.TorneoServicePort;
 import com.duelith.security.UserPrincipal;
 import com.duelith.security.annotations.CurrentUser;
+import com.duelith.security.annotations.IsCreator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -23,9 +25,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,19 +41,20 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/torneos")
 @RequiredArgsConstructor
-@Tag(name = "Torneos", description = "Creacion (ADMIN), consulta publica, inscripciones y brackets")
+@Tag(name = "Torneos", description = "Creacion (ORGANIZADOR/ADMIN), consulta publica, inscripciones y brackets")
 public class TorneoController {
 
     private final TorneoServicePort torneoService;
 
     @PostMapping
-    @Operation(summary = "Crear torneo", description = "Exclusivo de administradores. El torneo inicia en estado EN_REGISTRO.")
+    @PreAuthorize("hasAnyRole('ORGANIZADOR', 'ADMIN')")
+    @Operation(summary = "Crear torneo", description = "Exclusivo de organizadores y administradores. El torneo inicia en estado EN_REGISTRO.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Torneo creado",
                     content = @Content(schema = @Schema(implementation = TorneoResponse.class))),
             @ApiResponse(responseCode = "400", description = "Fechas invalidas"),
-            @ApiResponse(responseCode = "403", description = "Requiere rol ADMIN")
+            @ApiResponse(responseCode = "403", description = "Requiere rol ORGANIZADOR o ADMIN")
     })
     public ResponseEntity<TorneoResponse> crear(@CurrentUser UserPrincipal actual,
                                                 @Valid @RequestBody CrearTorneoRequest request) {
@@ -65,6 +71,50 @@ public class TorneoController {
             @Parameter(in = ParameterIn.QUERY, description = "Nombre del juego", example = "Valorant")
             @RequestParam(required = false) String juego) {
         return ResponseEntity.ok(torneoService.listar(estado, juego));
+    }
+
+    @GetMapping("/mis-torneos")
+    @Operation(summary = "Mis torneos", description = "Para ORGANIZADOR/CAPITAN/JUGADOR: torneos que creo. Para ADMIN: todos los torneos.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponse(responseCode = "200", description = "Listado obtenido")
+    public ResponseEntity<List<TorneoResponse>> misTorneos(@CurrentUser UserPrincipal actual) {
+        if (actual.getRol() == RolUsuario.ADMIN) {
+            return ResponseEntity.ok(torneoService.listar(null, null));
+        }
+        return ResponseEntity.ok(torneoService.listarPorCreador(actual.getId()));
+    }
+
+    @PutMapping("/{id}")
+    @IsCreator
+    @Operation(summary = "Editar torneo", description = "Solo ADMIN o el ORGANIZADOR que creo el torneo. Reemplazo completo de los datos editables.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Torneo actualizado",
+                    content = @Content(schema = @Schema(implementation = TorneoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Datos invalidos"),
+            @ApiResponse(responseCode = "403", description = "No eres el creador del torneo"),
+            @ApiResponse(responseCode = "404", description = "Torneo no encontrado"),
+            @ApiResponse(responseCode = "409", description = "Limite de equipos menor a los ya inscritos")
+    })
+    public ResponseEntity<TorneoResponse> editar(@CurrentUser UserPrincipal actual,
+                                                 @PathVariable Long id,
+                                                 @Valid @RequestBody CrearTorneoRequest request) {
+        return ResponseEntity.ok(torneoService.actualizar(actual.getId(), id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    @IsCreator
+    @Operation(summary = "Eliminar torneo", description = "Solo ADMIN o el ORGANIZADOR que creo el torneo. Solo si no tiene inscripciones ni partidos.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Torneo eliminado"),
+            @ApiResponse(responseCode = "403", description = "No eres el creador del torneo"),
+            @ApiResponse(responseCode = "404", description = "Torneo no encontrado"),
+            @ApiResponse(responseCode = "409", description = "Tiene inscripciones o partidos asociados")
+    })
+    public ResponseEntity<Void> borrar(@CurrentUser UserPrincipal actual, @PathVariable Long id) {
+        torneoService.eliminar(actual.getId(), id);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}")
@@ -94,7 +144,8 @@ public class TorneoController {
     }
 
     @PostMapping("/{id}/cerrar")
-    @Operation(summary = "Cerrar inscripciones", description = "Solo ADMIN. Transicion manual EN_REGISTRO -> INSCRIPCIONES_CERRADAS.")
+    @PreAuthorize("hasAnyRole('ORGANIZADOR', 'ADMIN')")
+    @Operation(summary = "Cerrar inscripciones", description = "Solo ORGANIZADOR o ADMIN. Transicion manual EN_REGISTRO -> INSCRIPCIONES_CERRADAS.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Inscripciones cerradas"),
@@ -108,7 +159,8 @@ public class TorneoController {
     }
 
     @PostMapping("/{id}/bracket")
-    @Operation(summary = "Generar bracket", description = "Solo ADMIN. Genera el bracket de eliminacion directa con siembras aleatorias; los equipos faltantes se resuelven como WALKOVER. Transicion a EN_CURSO.")
+    @PreAuthorize("hasAnyRole('ORGANIZADOR', 'ADMIN')")
+    @Operation(summary = "Generar bracket", description = "Solo ORGANIZADOR o ADMIN. Genera el bracket de eliminacion directa con siembras aleatorias; los equipos faltantes se resuelven como WALKOVER. Transicion a EN_CURSO.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Bracket generado",

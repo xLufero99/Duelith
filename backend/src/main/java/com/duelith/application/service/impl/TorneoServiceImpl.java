@@ -50,7 +50,7 @@ import java.util.TreeMap;
  * Concurrencia: las operaciones que cambian el estado del torneo o consumen
  * cupo de inscripcion usan SELECT ... FOR UPDATE sobre la fila del torneo.
  */
-@Service
+@Service("torneoService")
 @RequiredArgsConstructor
 @Slf4j
 public class TorneoServiceImpl implements TorneoServicePort {
@@ -70,8 +70,8 @@ public class TorneoServiceImpl implements TorneoServicePort {
     @Override
     @Transactional
     public TorneoResponse crear(Long adminId, CrearTorneoRequest request) {
-        Usuario admin = obtenerUsuario(adminId);
-        validarAdmin(admin);
+        Usuario organizador = obtenerUsuario(adminId);
+        validarOrganizadorOAdmin(organizador);
 
         if (request.getFechaFin().isBefore(request.getFechaInicio())) {
             throw new ReglaNegocioException("La fecha de fin no puede ser anterior a la fecha de inicio");
@@ -89,19 +89,77 @@ public class TorneoServiceImpl implements TorneoServicePort {
                 .limiteEquipos(request.getLimiteEquipos())
                 .estado(EstadoTorneo.EN_REGISTRO)
                 .premio(request.getPremio())
-                .creadoPor(admin)
+                .creadoPor(organizador)
                 .creadoEn(OffsetDateTime.now())
                 .build();
 
         Torneo guardado = torneoRepository.guardar(torneo);
-        log.info("Torneo creado: {} (id={}) por admin {}", guardado.getNombre(), guardado.getId(), adminId);
+        log.info("Torneo creado: {} (id={}) por usuario {} ({})", guardado.getNombre(),
+                guardado.getId(), adminId, organizador.getRol());
         return armarRespuesta(guardado);
+    }
+
+    @Override
+    @Transactional
+    public TorneoResponse actualizar(Long usuarioId, Long torneoId, CrearTorneoRequest request) {
+        Usuario usuario = obtenerUsuario(usuarioId);
+        Torneo torneo = torneoRepository.buscarPorIdConBloqueo(torneoId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Torneo", torneoId));
+        validarCreadorOAdmin(usuario, torneo);
+
+        if (request.getFechaFin().isBefore(request.getFechaInicio())) {
+            throw new ReglaNegocioException("La fecha de fin no puede ser anterior a la fecha de inicio");
+        }
+        long inscritos = inscripcionRepository.contarPorTorneoId(torneoId);
+        if (request.getLimiteEquipos() < inscritos) {
+            throw new ConflictoException("El limite de equipos no puede ser menor a los "
+                    + inscritos + " equipos ya inscritos");
+        }
+
+        torneo.setNombre(request.getNombre());
+        torneo.setJuego(request.getJuego());
+        torneo.setDescripcion(request.getDescripcion());
+        torneo.setFechaInicio(request.getFechaInicio());
+        torneo.setFechaFin(request.getFechaFin());
+        torneo.setLimiteEquipos(request.getLimiteEquipos());
+        torneo.setPremio(request.getPremio());
+
+        Torneo actualizado = torneoRepository.guardar(torneo);
+        log.info("Torneo {} actualizado por usuario {}", torneoId, usuarioId);
+        return armarRespuesta(actualizado);
+    }
+
+    @Override
+    @Transactional
+    public void eliminar(Long usuarioId, Long torneoId) {
+        Usuario usuario = obtenerUsuario(usuarioId);
+        Torneo torneo = torneoRepository.buscarPorIdConBloqueo(torneoId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Torneo", torneoId));
+        validarCreadorOAdmin(usuario, torneo);
+
+        if (inscripcionRepository.contarPorTorneoId(torneoId) > 0) {
+            throw new ConflictoException("No se puede eliminar: el torneo tiene equipos inscritos");
+        }
+        if (!partidoRepository.buscarPorTorneoId(torneoId).isEmpty()) {
+            throw new ConflictoException("No se puede eliminar: el torneo tiene partidos generados");
+        }
+
+        torneoRepository.eliminar(torneo);
+        log.info("Torneo {} eliminado por usuario {}", torneoId, usuarioId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<TorneoResponse> listar(EstadoTorneo estado, String juego) {
         return torneoRepository.listarConFiltros(estado, juego).stream()
+                .map(this::armarRespuesta)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TorneoResponse> listarPorCreador(Long creadorId) {
+        return torneoRepository.buscarPorCreador(creadorId).stream()
                 .map(this::armarRespuesta)
                 .toList();
     }
@@ -176,8 +234,8 @@ public class TorneoServiceImpl implements TorneoServicePort {
 
     @Override
     @Transactional
-    public void cerrarInscripciones(Long adminId, Long torneoId) {
-        validarAdmin(obtenerUsuario(adminId));
+    public void cerrarInscripciones(Long usuarioId, Long torneoId) {
+        validarOrganizadorOAdmin(obtenerUsuario(usuarioId));
         Torneo torneo = torneoRepository.buscarPorIdConBloqueo(torneoId)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Torneo", torneoId));
 
@@ -186,15 +244,15 @@ public class TorneoServiceImpl implements TorneoServicePort {
         }
         torneo.setEstado(EstadoTorneo.INSCRIPCIONES_CERRADAS);
         torneoRepository.guardar(torneo);
-        log.info("Inscripciones cerradas manualmente en torneo {} por admin {}", torneoId, adminId);
+        log.info("Inscripciones cerradas manualmente en torneo {} por usuario {}", torneoId, usuarioId);
     }
 
     // ===================== bracket =====================
 
     @Override
     @Transactional
-    public BracketResponse generarBracket(Long adminId, Long torneoId) {
-        validarAdmin(obtenerUsuario(adminId));
+    public BracketResponse generarBracket(Long usuarioId, Long torneoId) {
+        validarOrganizadorOAdmin(obtenerUsuario(usuarioId));
         Torneo torneo = torneoRepository.buscarPorIdConBloqueo(torneoId)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Torneo", torneoId));
 
@@ -383,9 +441,26 @@ public class TorneoServiceImpl implements TorneoServicePort {
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", id));
     }
 
-    private void validarAdmin(Usuario usuario) {
-        if (usuario.getRol() != RolUsuario.ADMIN) {
-            throw new AccesoDenegadoException("Esta operacion requiere permisos de administrador");
+    private void validarOrganizadorOAdmin(Usuario usuario) {
+        if (usuario.getRol() != RolUsuario.ADMIN && usuario.getRol() != RolUsuario.ORGANIZADOR) {
+            throw new AccesoDenegadoException("Esta operacion requiere rol ORGANIZADOR o ADMIN");
         }
+    }
+
+    /** Defensa en profundidad: solo ADMIN o el creador del torneo. */
+    private void validarCreadorOAdmin(Usuario usuario, Torneo torneo) {
+        boolean esAdmin = usuario.getRol() == RolUsuario.ADMIN;
+        boolean esCreador = usuario.getRol() == RolUsuario.ORGANIZADOR
+                && torneo.getCreadoPor().getId().equals(usuario.getId());
+        if (!esAdmin && !esCreador) {
+            throw new AccesoDenegadoException("Solo el organizador que creo el torneo o un ADMIN pueden modificarlo");
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean esCreador(Long torneoId, String username) {
+        Torneo torneo = obtenerTorneo(torneoId);
+        return torneo.getCreadoPor().getNombreUsuario().equalsIgnoreCase(username);
     }
 }

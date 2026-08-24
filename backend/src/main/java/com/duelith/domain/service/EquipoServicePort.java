@@ -25,4 +25,7 @@ public interface EquipoServicePort {
     EquipoResponse transferirCapitania(Long capitanActualId, Long equipoId, Long nuevoCapitanId);
 
     void abandonar(Long usuarioId, Long equipoId);
+
+    /** Usado por futuras reglas SpEL: true si ese username es el capitan del equipo. */
+    boolean esCapitan(Long equipoId, String username);
 }

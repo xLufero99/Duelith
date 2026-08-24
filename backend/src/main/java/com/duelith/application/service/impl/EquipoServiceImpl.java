@@ -12,6 +12,7 @@ import com.duelith.application.mapper.EquipoMapper;
 import com.duelith.domain.model.Equipo;
 import com.duelith.domain.model.MiembroEquipo;
 import com.duelith.domain.model.RolEquipo;
+import com.duelith.domain.model.RolUsuario;
 import com.duelith.domain.model.Usuario;
 import com.duelith.domain.repository.EquipoRepositoryPort;
 import com.duelith.domain.repository.MiembroEquipoRepositoryPort;
@@ -71,6 +72,9 @@ public class EquipoServiceImpl implements EquipoServicePort {
                 .rol(RolEquipo.CAPITAN)
                 .fechaIngreso(OffsetDateTime.now())
                 .build());
+
+        // Rol global: el fundador pasa a ser CAPITAN si era JUGADOR.
+        promoverACapitan(fundador);
 
         log.info("Equipo creado: {} (id={}) por usuario {}", equipo.getNombre(), equipo.getId(), usuarioId);
         return armarRespuesta(equipo);
@@ -189,6 +193,10 @@ public class EquipoServiceImpl implements EquipoServicePort {
         miembroRepository.guardar(membresiaAnterior);
         miembroRepository.guardar(membresiaNueva);
         equipoRepository.guardar(equipo);
+
+        // Rol global: el nuevo capitan tambien queda como CAPITAN.
+        promoverACapitan(nuevoCapitan);
+
         log.info("Capitania del equipo {} transferida a usuario {}", equipoId, nuevoCapitanId);
 
         return armarRespuesta(equipo);
@@ -238,6 +246,21 @@ public class EquipoServiceImpl implements EquipoServicePort {
     private void validarCapitan(Equipo equipo, Long usuarioId) {
         if (!usuarioId.equals(equipo.getCapitan().getId())) {
             throw new AccesoDenegadoException("Solo el capitan puede realizar esta operacion");
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean esCapitan(Long equipoId, String username) {
+        Equipo equipo = obtenerEquipo(equipoId);
+        return equipo.getCapitan().getNombreUsuario().equalsIgnoreCase(username);
+    }
+
+    /** Asciende el rol global del usuario a CAPITAN si actualmente es JUGADOR. */
+    private void promoverACapitan(Usuario usuario) {
+        if (usuario.getRol() == RolUsuario.JUGADOR) {
+            usuario.setRol(RolUsuario.CAPITAN);
+            usuarioRepository.guardar(usuario);
         }
     }
 

@@ -23,6 +23,11 @@ public class TorneoRepositoryAdapter implements TorneoRepositoryPort {
     }
 
     @Override
+    public void eliminar(Torneo torneo) {
+        jpa.delete(torneo);
+    }
+
+    @Override
     public Optional<Torneo> buscarPorId(Long id) {
         return jpa.findById(id);
     }
@@ -44,5 +49,10 @@ public class TorneoRepositoryAdapter implements TorneoRepositoryPort {
             return jpa.findByJuegoIgnoreCase(juego.trim());
         }
         return jpa.findAll();
+    }
+
+    @Override
+    public List<Torneo> buscarPorCreador(Long creadorId) {
+        return jpa.findByCreadoPorIdOrderByCreadoEnDesc(creadorId);
     }
 }

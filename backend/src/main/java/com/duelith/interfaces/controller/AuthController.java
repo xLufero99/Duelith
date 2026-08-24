@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -83,5 +84,20 @@ public class AuthController {
             @Parameter(hidden = true) @CurrentUser UserPrincipal actual,
             @Valid @RequestBody ActualizarPerfilRequest request) {
         return ResponseEntity.ok(authService.actualizarPerfil(actual.getId(), request));
+    }
+
+    @PatchMapping("/convertir-organizador")
+    @Operation(summary = "Convertirse en organizador", description = "Cambia el rol del usuario autenticado a ORGANIZADOR para que pueda crear torneos.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Rol cambiado a ORGANIZADOR",
+                    content = @Content(schema = @Schema(implementation = UsuarioResponse.class))),
+            @ApiResponse(responseCode = "400", description = "El usuario ya es organizador o admin"),
+            @ApiResponse(responseCode = "401", description = "No autenticado"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+    })
+    public ResponseEntity<UsuarioResponse> convertirOrganizador(
+            @Parameter(hidden = true) @CurrentUser UserPrincipal actual) {
+        return ResponseEntity.ok(authService.convertirOrganizador(actual.getId()));
     }
 }

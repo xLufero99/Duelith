@@ -18,4 +18,7 @@ public interface AuthServicePort {
     UsuarioResponse obtenerPerfil(Long usuarioId);
 
     UsuarioResponse actualizarPerfil(Long usuarioId, ActualizarPerfilRequest request);
+
+    /** Promueve al usuario autenticado al rol ORGANIZADOR. */
+    UsuarioResponse convertirOrganizador(Long usuarioId);
 }

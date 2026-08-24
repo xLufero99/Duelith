@@ -8,6 +8,7 @@ import com.duelith.application.dto.response.UsuarioResponse;
 import com.duelith.application.exceptions.ConflictoException;
 import com.duelith.application.exceptions.CredencialesInvalidasException;
 import com.duelith.application.exceptions.RecursoNoEncontradoException;
+import com.duelith.application.exceptions.ReglaNegocioException;
 import com.duelith.application.mapper.UsuarioMapper;
 import com.duelith.domain.model.RolUsuario;
 import com.duelith.domain.model.Usuario;
@@ -120,6 +121,26 @@ public class AuthServiceImpl implements AuthServicePort {
         }
 
         return usuarioMapper.toResponse(usuarioRepository.guardar(usuario));
+    }
+
+    @Override
+    @Transactional
+    public UsuarioResponse convertirOrganizador(Long usuarioId) {
+        Usuario usuario = usuarioRepository.buscarPorId(usuarioId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", usuarioId));
+
+        if (usuario.getRol() == RolUsuario.ORGANIZADOR) {
+            throw new ReglaNegocioException("Ya eres un organizador");
+        }
+        // No se degrada a un ADMIN: ya puede gestionar torneos.
+        if (usuario.getRol() == RolUsuario.ADMIN) {
+            throw new ReglaNegocioException("Los administradores ya pueden gestionar torneos");
+        }
+
+        usuario.setRol(RolUsuario.ORGANIZADOR);
+        Usuario actualizado = usuarioRepository.guardar(usuario);
+        log.info("Usuario promovido a ORGANIZADOR: {} (id={})", actualizado.getNombreUsuario(), actualizado.getId());
+        return usuarioMapper.toResponse(actualizado);
     }
 
     private AuthResponse construirAuthResponse(Authentication auth, Usuario usuario) {
