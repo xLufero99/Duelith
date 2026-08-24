@@ -267,7 +267,7 @@ export default function TorneoDetalle() {
 
   const usuario = usuarioStorage.get<{ id: number; rol: string }>();
   const autenticado = !!tokenStorage.get();
-  const esAdmin = usuario?.rol === "ADMIN";
+  const esAdmin = usuario?.rol === "ADMIN" || usuario?.rol === "ORGANIZADOR";
 
   const cargarTodo = useCallback(async () => {
     try {
@@ -363,11 +363,7 @@ export default function TorneoDetalle() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar
-        authenticated={autenticado}
-        username={usuarioStorage.get<{ nombreUsuario: string }>()?.nombreUsuario ?? ""}
-        isAdmin={esAdmin}
-      />
+      <Navbar />
 
       {/* Modal inscribir */}
       {inscribirOpen && (

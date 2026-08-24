@@ -75,7 +75,7 @@ export default function EquipoDetalle() {
   if (!equipo) {
     return (
       <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-        <Navbar authenticated={autenticado} username={usuario?.nombreUsuario ?? ""} isAdmin={usuario?.rol === "ADMIN"} />
+        <Navbar />
         <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px", textAlign: "center" }}>
           <div className="glass-card" style={{ borderRadius: 12, padding: "16px 24px", maxWidth: 480, margin: "80px auto", border: "1px solid rgba(239,68,68,0.35)" }}>
             <p style={{ color: "#F87171", fontSize: 14 }}>⚠️ {error || "Equipo no encontrado"}</p>
@@ -112,7 +112,7 @@ export default function EquipoDetalle() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated={autenticado} username={usuario?.nombreUsuario ?? ""} isAdmin={usuario?.rol === "ADMIN"} />
+      <Navbar />
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28, fontSize: 13, color: "#64748B" }}>

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { registrar } from "../api/authApi";
-import { ApiError, tokenStorage, usuarioStorage } from "../utils/apiClient";
+import { useAuth } from "../context/AuthContext";
+import { ApiError } from "../utils/apiClient";
 
 export default function Register() {
   const navigate = useNavigate();
+  const { iniciarSesion } = useAuth();
   const [form, setForm] = useState({ nombreUsuario: "", email: "", password: "", gamertag: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -20,8 +22,7 @@ export default function Register() {
         password: form.password,
         ...(form.gamertag.trim() ? { gamertag: form.gamertag.trim() } : {}),
       });
-      tokenStorage.set(res.token);
-      usuarioStorage.set(res.usuario);
+      iniciarSesion(res);
       navigate("/dashboard");
     } catch (err) {
       if (err instanceof ApiError && err.status === 400 && Object.keys(err.errores).length > 0) {

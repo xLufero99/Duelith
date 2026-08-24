@@ -52,11 +52,7 @@ export default function Dashboard() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar
-        authenticated
-        username={usuario?.nombreUsuario ?? ""}
-        isAdmin={usuario?.rol === "ADMIN"}
-      />
+      <Navbar />
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
         {/* Error */}

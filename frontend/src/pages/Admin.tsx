@@ -28,7 +28,7 @@ export default function Admin() {
 
   const usuario = usuarioStorage.get<{ id: number; nombreUsuario: string; rol?: string }>();
   const autenticado = !!tokenStorage.get();
-  const esAdmin = usuario?.rol === "ADMIN";
+  const esAdmin = usuario?.rol === "ADMIN" || usuario?.rol === "ORGANIZADOR";
 
   const cargar = () => {
     setLoading(true);
@@ -95,7 +95,7 @@ export default function Admin() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated={autenticado} username={usuario?.nombreUsuario ?? ""} isAdmin={esAdmin} />
+      <Navbar />
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
         <div style={{ marginBottom: 36 }}>

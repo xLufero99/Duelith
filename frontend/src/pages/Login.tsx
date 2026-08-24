@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { login as loginApi } from "../api/authApi";
-import { ApiError, tokenStorage, usuarioStorage } from "../utils/apiClient";
+import { useAuth } from "../context/AuthContext";
+import { ApiError } from "../utils/apiClient";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { iniciarSesion } = useAuth();
   const [form, setForm] = useState({ identificador: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -15,8 +17,7 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await loginApi(form);
-      tokenStorage.set(res.token);
-      usuarioStorage.set(res.usuario);
+      iniciarSesion(res);
       navigate("/dashboard");
     } catch (err) {
       setError(

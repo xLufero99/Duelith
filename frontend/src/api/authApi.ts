@@ -34,3 +34,11 @@ export async function actualizarPerfil(
   const { data } = await apiClient.put<UsuarioResponse>("/auth/me", request);
   return data;
 }
+
+/** Cambia el rol del usuario autenticado a ORGANIZADOR (PATCH /auth/convertir-organizador). */
+export async function convertirOrganizador(): Promise<UsuarioResponse> {
+  const { data } = await apiClient.patch<UsuarioResponse>(
+    "/auth/convertir-organizador",
+  );
+  return data;
+}

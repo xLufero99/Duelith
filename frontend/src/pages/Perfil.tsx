@@ -1,18 +1,27 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { actualizarPerfil, obtenerPerfil } from "../api/authApi";
 import { misEquipos } from "../api/equipoApi";
+import { useAuth } from "../context/AuthContext";
 import type { UsuarioResponse } from "../types";
-import { ApiError, tokenStorage, usuarioStorage } from "../utils/apiClient";
+import { ApiError, tokenStorage } from "../utils/apiClient";
 
 export default function Perfil() {
+  const navigate = useNavigate();
+  const { actualizarUsuario, convertirOrganizador: convertirEnContexto, cerrarSesion } = useAuth();
   const [usuario, setUsuario] = useState<UsuarioResponse | null>(null);
   const [form, setForm] = useState({ nombreUsuario: "", email: "", gamertag: "" });
   const [totalEquipos, setTotalEquipos] = useState(0);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [convirtiendo, setConvirtiendo] = useState(false);
+  const [convertido, setConvertido] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+
+  /** JUGADOR y CAPITAN pueden convertirse en organizador. */
+  const puedeConvertirse = (r: string | undefined) => r === "JUGADOR" || r === "CAPITAN";
 
   useEffect(() => {
     let alive = true;
@@ -20,6 +29,7 @@ export default function Perfil() {
       .then(([u, eqs]) => {
         if (!alive) return;
         setUsuario(u);
+        actualizarUsuario(u);
         setForm({
           nombreUsuario: u.nombreUsuario,
           email: u.email,
@@ -53,7 +63,7 @@ export default function Perfil() {
 
       const actualizado = await actualizarPerfil(cambios);
       setUsuario(actualizado);
-      usuarioStorage.set(actualizado);
+      actualizarUsuario(actualizado);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
@@ -67,8 +77,37 @@ export default function Perfil() {
     }
   };
 
+  const handleConvertir = async () => {
+    if (!usuario || !puedeConvertirse(usuario.rol)) return;
+    setError("");
+    setConvertido(false);
+    setConvirtiendo(true);
+    try {
+      const actualizado = await convertirEnContexto();
+      setUsuario(actualizado);
+      setConvertido(true);
+      setTimeout(() => setConvertido(false), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo completar la conversión");
+    } finally {
+      setConvirtiendo(false);
+    }
+  };
+
+  const handleCerrarSesion = () => {
+    cerrarSesion();
+    navigate("/");
+  };
+
+  const esOrganizador = usuario?.rol === "ORGANIZADOR";
+  const esAdmin = usuario?.rol === "ADMIN";
+
   const infoCuenta = [
-    { label: "Rol", value: usuario?.rol === "ADMIN" ? "Administrador" : "Jugador", icon: "🎭" },
+    {
+      label: "Rol",
+      value: esAdmin ? "Administrador 👑" : esOrganizador ? "Organizador" : usuario?.rol === "CAPITAN" ? "Capitán" : "Jugador",
+      icon: "🎭",
+    },
     { label: "Equipos activos", value: String(totalEquipos), icon: "🛡️" },
     {
       label: "Miembro desde",
@@ -88,7 +127,7 @@ export default function Perfil() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated={!!tokenStorage.get()} username={usuario?.nombreUsuario ?? ""} isAdmin={usuario?.rol === "ADMIN"} />
+      <Navbar />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "40px 32px" }}>
         <h1 style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 800, fontSize: 28, color: "white", marginBottom: 32 }}>
@@ -119,11 +158,99 @@ export default function Perfil() {
                 {(usuario?.nombreUsuario ?? "U")[0].toUpperCase()}
               </div>
               <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 700, fontSize: 18, color: "white" }}>{usuario?.nombreUsuario}</p>
+              <span
+                style={{
+                  display: "inline-block",
+                  marginTop: 6,
+                  padding: "3px 12px",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontFamily: "Montserrat, sans-serif",
+                  letterSpacing: 0.5,
+                  color: esAdmin ? "#FCA5A5" : esOrganizador ? "#86EFAC" : usuario?.rol === "CAPITAN" ? "#93C5FD" : "#94A3B8",
+                  background: esAdmin
+                    ? "rgba(239,68,68,0.12)"
+                    : esOrganizador
+                      ? "rgba(34,197,94,0.12)"
+                      : usuario?.rol === "CAPITAN"
+                        ? "rgba(59,130,246,0.12)"
+                        : "rgba(148,163,184,0.12)",
+                  border: `1px solid ${
+                    esAdmin
+                      ? "rgba(239,68,68,0.3)"
+                      : esOrganizador
+                        ? "rgba(34,197,94,0.3)"
+                        : usuario?.rol === "CAPITAN"
+                          ? "rgba(59,130,246,0.3)"
+                          : "rgba(148,163,184,0.3)"
+                  }`,
+                }}
+              >
+                {esAdmin ? "👑 ADMIN" : (usuario?.rol ?? "JUGADOR")}
+              </span>
               {usuario?.gamertag && <p style={{ color: "#64748B", fontSize: 13 }}>{usuario.gamertag}</p>}
               <p style={{ color: "#64748B", fontSize: 13, marginTop: 4 }}>
                 Miembro desde{" "}
                 {usuario?.creadoEn ? new Date(usuario.creadoEn).toLocaleDateString("es", { month: "long", year: "numeric" }) : "—"}
               </p>
+
+              {/* Convertirse en Organizador */}
+              <div style={{ marginTop: 16, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                {esAdmin ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 18px",
+                      borderRadius: 999,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      fontFamily: "Montserrat, sans-serif",
+                      color: "#FCA5A5",
+                      background: "rgba(239,68,68,0.1)",
+                      border: "1px solid rgba(239,68,68,0.3)",
+                    }}
+                  >
+                    👑 Administrador · control total de la plataforma
+                  </span>
+                ) : esOrganizador ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 18px",
+                      borderRadius: 999,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      fontFamily: "Montserrat, sans-serif",
+                      color: "#86EFAC",
+                      background: "rgba(34,197,94,0.1)",
+                      border: "1px solid rgba(34,197,94,0.3)",
+                    }}
+                  >
+                    ✅ Eres Organizador · ya puedes crear torneos
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      className="btn-primary"
+                      onClick={handleConvertir}
+                      disabled={convirtiendo || !puedeConvertirse(usuario?.rol)}
+                      style={{ justifyContent: "center", opacity: convirtiendo ? 0.7 : 1 }}
+                    >
+                      {convirtiendo ? "Convirtiendo..." : "🔓 Convertirse en Organizador"}
+                    </button>
+                    {convertido && (
+                      <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 600 }}>
+                        🎉 ¡Ahora eres Organizador! Ya puedes crear torneos.
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Fields */}
@@ -159,6 +286,14 @@ export default function Perfil() {
               style={{ width: "100%", justifyContent: "center", marginTop: 24, opacity: guardando ? 0.7 : 1 }}
             >
               {guardando ? "Guardando..." : saved ? "✅ Cambios guardados" : "Guardar cambios"}
+            </button>
+
+            <button
+              className="btn-secondary"
+              onClick={handleCerrarSesion}
+              style={{ width: "100%", justifyContent: "center", marginTop: 12, fontSize: 14 }}
+            >
+              🚪 Cerrar Sesión
             </button>
 
             <div style={{ marginTop: 20, padding: 16, borderRadius: 10, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>

@@ -1,18 +1,44 @@
 import { NavLink, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
-interface NavbarProps {
-  authenticated?: boolean;
-  username?: string;
-  isAdmin?: boolean;
-}
+// Navegacion segun el rol del usuario (AuthContext):
+// - JUGADOR/CAPITAN: Torneos, Mis Equipos, Dashboard
+// - ORGANIZADOR: Torneos, Mis Torneos, Mis Equipos, Dashboard
+// - ADMIN: Torneos, Mis Torneos, Admin, Dashboard
+const itemsPorRol = {
+  JUGADOR: [
+    { to: "/torneos", label: "Torneos" },
+    { to: "/equipos", label: "Mis Equipos" },
+    { to: "/dashboard", label: "Dashboard" },
+  ],
+  CAPITAN: [
+    { to: "/torneos", label: "Torneos" },
+    { to: "/equipos", label: "Mis Equipos" },
+    { to: "/dashboard", label: "Dashboard" },
+  ],
+  ORGANIZADOR: [
+    { to: "/torneos", label: "Torneos" },
+    { to: "/mis-torneos", label: "Mis Torneos" },
+    { to: "/equipos", label: "Mis Equipos" },
+    { to: "/dashboard", label: "Dashboard" },
+  ],
+  ADMIN: [
+    { to: "/torneos", label: "Torneos" },
+    { to: "/mis-torneos", label: "Mis Torneos" },
+    { to: "/admin", label: "Admin" },
+    { to: "/dashboard", label: "Dashboard" },
+  ],
+} as const;
 
-const links = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/torneos", label: "Torneos" },
-  { to: "/equipos", label: "Mis Equipos" },
-];
+const itemsBase = itemsPorRol.JUGADOR;
 
-export default function Navbar({ authenticated = false, username = "", isAdmin = false }: NavbarProps) {
+export default function Navbar() {
+  const { usuario, autenticado } = useAuth();
+  const rol = usuario?.rol;
+  const items =
+    rol && rol in itemsPorRol ? itemsPorRol[rol as keyof typeof itemsPorRol] : itemsBase;
+  const puedeCrear = rol === "ORGANIZADOR" || rol === "ADMIN";
+
   const linkStyle = ({ isActive }: { isActive: boolean }) => ({
     color: isActive ? "#A78BFA" : "#94A3B8",
     background: isActive ? "rgba(108,43,217,0.12)" : "transparent",
@@ -63,16 +89,30 @@ export default function Navbar({ authenticated = false, username = "", isAdmin =
           </span>
         </Link>
 
-        {authenticated ? (
+        {autenticado ? (
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-            {links.map((l) => (
+            {items.map((l) => (
               <NavLink key={l.to} to={l.to} style={linkStyle}>
                 {l.label}
               </NavLink>
             ))}
-            {isAdmin && (
-              <NavLink to="/admin" style={linkStyle}>
-                Admin
+            {puedeCrear && (
+              <NavLink
+                to="/admin"
+                style={{
+                  color: "white",
+                  textDecoration: "none",
+                  fontSize: 14,
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 700,
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  background: "linear-gradient(135deg, #6C2BD9, #00D4FF)",
+                  boxShadow: "0 0 16px rgba(108,43,217,0.35)",
+                  transition: "all 0.2s",
+                }}
+              >
+                🏆 Crear Torneo
               </NavLink>
             )}
             <NavLink to="/perfil" style={{ textDecoration: "none", marginLeft: 8 }}>
@@ -101,10 +141,10 @@ export default function Navbar({ authenticated = false, username = "", isAdmin =
                     color: "white",
                   }}
                 >
-                  {(username || "U")[0].toUpperCase()}
+                  {(usuario?.nombreUsuario || "U")[0].toUpperCase()}
                 </div>
                 <span style={{ color: "white", fontSize: 13, fontWeight: 600, fontFamily: "Montserrat, sans-serif" }}>
-                  {username}
+                  {usuario?.nombreUsuario}
                 </span>
               </div>
             </NavLink>

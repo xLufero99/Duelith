@@ -102,7 +102,7 @@ export default function Equipos() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated={autenticado} username={usuario?.nombreUsuario ?? ""} isAdmin={usuario?.rol === "ADMIN"} />
+      <Navbar />
       {showCrear && (
         <CrearEquipoModal
           onClose={() => setShowCrear(false)}

@@ -26,6 +26,26 @@ export async function listar(filtros?: {
   return data;
 }
 
+/** GET /torneos/mis-torneos. ORGANIZADOR: los suyos. ADMIN: todos. */
+export async function misTorneos(): Promise<TorneoResponse[]> {
+  const { data } = await apiClient.get<TorneoResponse[]>("/torneos/mis-torneos");
+  return data;
+}
+
+/** PUT /torneos/{id}. Solo ADMIN o el ORGANIZADOR creador (@IsCreator). */
+export async function actualizarTorneo(
+  id: number,
+  request: CrearTorneoRequest,
+): Promise<TorneoResponse> {
+  const { data } = await apiClient.put<TorneoResponse>(`/torneos/${id}`, request);
+  return data;
+}
+
+/** DELETE /torneos/{id}. Solo ADMIN o el ORGANIZADOR creador; sin inscripciones ni partidos. */
+export async function borrarTorneo(id: number): Promise<void> {
+  await apiClient.delete(`/torneos/${id}`);
+}
+
 /** Datos del torneo y equipos inscritos. Consulta publica. */
 export async function obtenerDetalle(id: number): Promise<TorneoDetalleResponse> {
   const { data } = await apiClient.get<TorneoDetalleResponse>(`/torneos/${id}`);

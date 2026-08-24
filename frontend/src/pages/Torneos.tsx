@@ -19,6 +19,7 @@ export default function Torneos() {
 
   const usuario = usuarioStorage.get<{ nombreUsuario: string; rol?: string }>();
   const autenticado = !!tokenStorage.get();
+  const puedeGestionar = usuario?.rol === "ADMIN" || usuario?.rol === "ORGANIZADOR";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -46,11 +47,7 @@ export default function Torneos() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar
-        authenticated={autenticado}
-        username={usuario?.nombreUsuario ?? ""}
-        isAdmin={usuario?.rol === "ADMIN"}
-      />
+      <Navbar />
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
         {/* Header */}
@@ -63,7 +60,7 @@ export default function Torneos() {
               {loading ? "Cargando..." : `${filtered.length} torneo${filtered.length !== 1 ? "s" : ""} encontrado${filtered.length !== 1 ? "s" : ""}`}
             </p>
           </div>
-          {autenticado && usuario?.rol === "ADMIN" && (
+          {autenticado && puedeGestionar && (
             <Link to="/admin" className="btn-primary" style={{ textDecoration: "none", fontSize: 14 }}>
               + Crear Torneo
             </Link>

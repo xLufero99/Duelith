@@ -49,7 +49,7 @@ export default function TestConnection() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0F" }}>
-      <Navbar authenticated username="lufero" />
+      <Navbar />
 
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "40px 32px" }}>
         <h1
