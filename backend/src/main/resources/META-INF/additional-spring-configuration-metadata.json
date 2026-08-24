@@ -1,0 +1,21 @@
+{
+  "properties": [
+    {
+      "name": "jwt.secret",
+      "type": "java.lang.String",
+      "description": "Clave secreta usada para firmar los tokens JWT (HS256). Debe configurarse via variable de entorno en produccion."
+    },
+    {
+      "name": "jwt.expiration",
+      "type": "java.lang.Long",
+      "description": "Tiempo de validez del token JWT en milisegundos.",
+      "defaultValue": 604800000
+    },
+    {
+      "name": "cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Origenes permitidos para CORS, separados por coma."
+    }
+  ],
+  "hints": []
+}

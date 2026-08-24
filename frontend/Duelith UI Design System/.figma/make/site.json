@@ -1,0 +1,10 @@
+{
+  "description": "Duelith is an e-sports tournament platform enabling players to register, form teams, enter tournaments, view brackets, and report match results.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
