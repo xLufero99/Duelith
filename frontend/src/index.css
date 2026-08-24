@@ -178,3 +178,53 @@ h1, h2, h3, h4, h5, h6 {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
+
+/* Mini reproductor de musica flotante */
+.music-fab {
+  position: fixed;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 90;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid rgba(108, 43, 217, 0.45);
+  background: linear-gradient(135deg, #6C2BD9, #00D4FF);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.music-fab:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 26px rgba(108, 43, 217, 0.6);
+}
+
+.music-fab:active {
+  transform: scale(0.95);
+}
+
+.music-fab-activa {
+  border-color: rgba(0, 212, 255, 0.6);
+}
+
+@media (max-width: 480px) {
+  .music-fab {
+    width: 48px;
+    height: 48px;
+    right: 16px;
+    bottom: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-fab,
+  .music-fab:hover,
+  .music-fab:active {
+    transform: none;
+    transition: none;
+  }
+}

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import MusicPlayer from "./components/MusicPlayer";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/test-conexion" element={<TestConnection />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <MusicPlayer />
       </BrowserRouter>
     </AuthProvider>
   );
