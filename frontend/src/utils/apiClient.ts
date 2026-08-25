@@ -7,11 +7,25 @@ import axios, {
 
 // ============================================================
 // Cliente HTTP central del frontend Duelith.
-// - baseURL desde VITE_API_URL (ej: http://localhost:8080)
-// - Adjunta el token JWT automaticamente
+// - baseURL configurable (local / produccion / variable de entorno)
+// - Adjunta el token JWT automaticamente (localStorage)
 // - Normaliza los errores del backend (ErrorResponse)
 // - En 401 limpia la sesion y redirige a /login
 // ============================================================
+
+// ===================== CONFIGURACIÓN DE API =====================
+// 🔧 Descomenta la línea que necesites (solo debe haber una activa):
+
+// 🔥 LOCAL (desarrollo en tu máquina)
+// const API_BASE_URL = "http://localhost:8080";
+
+// 🚀 PRODUCCIÓN (desplegado en Railway)
+// const API_BASE_URL = "https://duelith-production.up.railway.app";
+
+// 💡 Usar variable de entorno (alternativa recomendada):
+//    Lee VITE_API_URL de .env.development / .env.production y cae a local.
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+// ================================================================
 
 const TOKEN_KEY = "duelith_token";
 const USUARIO_KEY = "duelith_usuario";
@@ -54,10 +68,9 @@ export class ApiError extends Error {
 }
 
 function crearCliente(): AxiosInstance {
-  // Con VITE_API_URL=http://localhost:8080 las peticiones van directas al
-  // backend (CORS configurado). Si se deja vacio, usan el mismo origen y
-  // el proxy de vite.config.ts las reenvia a Spring Boot sin CORS.
-  const baseURL = `${import.meta.env.VITE_API_URL ?? ""}/api`;
+  // Todas las rutas de los servicios ya son relativas (/auth/..., /torneos/...),
+  // el sufijo /api va aqui para no repetirlo en cada llamada.
+  const baseURL = `${API_BASE_URL}/api`;
 
   const client = axios.create({
     baseURL,
