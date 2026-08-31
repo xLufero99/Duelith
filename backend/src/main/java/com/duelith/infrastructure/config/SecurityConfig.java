@@ -85,6 +85,11 @@ public class SecurityConfig {
                         .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Autenticacion
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
+                        // Donaciones: crear (publica), estado por referencia (publica),
+                        // webhook de Wompi (publica, la firma se valida en el handler)
+                        .requestMatchers(HttpMethod.POST, "/api/donaciones/create", "/api/webhook/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/donaciones/mis-donaciones").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/donaciones/**").permitAll()
                         // Convertirse en organizador: cualquier usuario autenticado
                         .requestMatchers("/api/auth/convertir-organizador").authenticated()
                         // Mis torneos: autenticado (debe ir ANTES del GET publico general)

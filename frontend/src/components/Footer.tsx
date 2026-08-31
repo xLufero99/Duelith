@@ -1,6 +1,10 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import DonacionModal from "./DonacionModal";
 
 export default function Footer() {
+  const [donacionAbierta, setDonacionAbierta] = useState(false);
+
   return (
     <footer
       style={{
@@ -28,6 +32,26 @@ export default function Footer() {
             <p style={{ color: "#64748B", fontSize: 14, marginTop: 12, lineHeight: 1.6, maxWidth: 240 }}>
               La plataforma de torneos e-sports donde los mejores jugadores compiten por la gloria.
             </p>
+            <button
+              onClick={() => setDonacionAbierta(true)}
+              style={{
+                marginTop: 16,
+                padding: "10px 18px",
+                borderRadius: 10,
+                border: "none",
+                background: "linear-gradient(135deg, #6C2BD9, #00D4FF)",
+                color: "#fff",
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer",
+                transition: "transform 0.2s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            >
+              ❤️ Apoyar DUELITH
+            </button>
           </div>
           <div>
             <p style={{ fontFamily: "Montserrat, sans-serif", fontWeight: 600, fontSize: 13, color: "#94A3B8", marginBottom: 16, letterSpacing: "0.08em", textTransform: "uppercase" }}>Plataforma</p>
@@ -70,6 +94,10 @@ export default function Footer() {
             ))}
           </div>
         </div>
+        <DonacionModal
+          abierto={donacionAbierta}
+          onCerrar={() => setDonacionAbierta(false)}
+        />
       </div>
     </footer>
   );

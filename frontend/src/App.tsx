@@ -13,6 +13,9 @@ import EquipoDetalle from "./pages/EquipoDetalle";
 import Perfil from "./pages/Perfil";
 import Admin from "./pages/Admin";
 import TestConnection from "./pages/TestConnection";
+import DonacionExito from "./pages/DonacionExito";
+import DonacionFallo from "./pages/DonacionFallo";
+import DonacionPendiente from "./pages/DonacionPendiente";
 
 export default function App() {
   return (
@@ -31,6 +34,9 @@ export default function App() {
           <Route path="/perfil" element={<Perfil />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/test-conexion" element={<TestConnection />} />
+          <Route path="/donaciones/exito" element={<DonacionExito />} />
+          <Route path="/donaciones/fallo" element={<DonacionFallo />} />
+          <Route path="/donaciones/pendiente" element={<DonacionPendiente />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <MusicPlayer />

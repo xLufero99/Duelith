@@ -4,6 +4,7 @@ import com.duelith.application.dto.response.ErrorResponse;
 import com.duelith.application.exceptions.AccesoDenegadoException;
 import com.duelith.application.exceptions.ConflictoException;
 import com.duelith.application.exceptions.CredencialesInvalidasException;
+import com.duelith.application.exceptions.RateLimitExcedidoException;
 import com.duelith.application.exceptions.RecursoNoEncontradoException;
 import com.duelith.application.exceptions.ReglaNegocioException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +28,12 @@ import java.util.Map;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(RateLimitExcedidoException.class)
+    public ResponseEntity<ErrorResponse> manejarRateLimit(RateLimitExcedidoException ex,
+                                                          HttpServletRequest request) {
+        return construir(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request, null);
+    }
 
     @ExceptionHandler(RecursoNoEncontradoException.class)
     public ResponseEntity<ErrorResponse> manejarNoEncontrado(RecursoNoEncontradoException ex,

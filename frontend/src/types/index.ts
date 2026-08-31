@@ -16,6 +16,43 @@ export type EstadoPartido = "PENDIENTE" | "EN_JUEGO" | "FINALIZADO" | "WALKOVER"
 
 export type RolEquipo = "CAPITAN" | "JUGADOR" | "SUPLENTE";
 
+// ------------------------ Donaciones (Wompi) ------------------------
+
+export type MetodoPagoDonacion = "NEQUI" | "PSE";
+
+export type EstadoDonacion =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "EXPIRED"
+  | "ERROR";
+
+export interface DonacionResponse {
+  id: number;
+  reference: string;
+  amount: number;
+  email: string;
+  paymentMethod: MetodoPagoDonacion;
+  status: EstadoDonacion;
+  transactionId: string | null;
+  creadoEn: string;
+}
+
+export interface DonacionResultadoResponse {
+  success: boolean;
+  redirectUrl: string;
+  reference: string;
+  message?: string;
+}
+
+export interface CrearDonacionRequest {
+  amount: number;
+  email: string;
+  paymentMethod: MetodoPagoDonacion;
+  sessionId: string;
+  deviceId: string;
+}
+
 // ------------------------ Responses ------------------------
 
 export interface UsuarioResponse {

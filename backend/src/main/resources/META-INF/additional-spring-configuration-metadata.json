@@ -15,6 +15,76 @@
       "name": "cors.allowed-origins",
       "type": "java.util.List<java.lang.String>",
       "description": "Origenes permitidos para CORS, separados por coma."
+    },
+    {
+      "name": "wompi.api-url",
+      "type": "java.lang.String",
+      "description": "URL base de la API de Wompi (sandbox o produccion)."
+    },
+    {
+      "name": "wompi.public-key",
+      "type": "java.lang.String",
+      "description": "Llave publica de Wompi. Solo se expone al frontend."
+    },
+    {
+      "name": "wompi.private-key",
+      "type": "java.lang.String",
+      "description": "Llave privada de Wompi. SOLO backend, nunca exponer."
+    },
+    {
+      "name": "wompi.integrity-key",
+      "type": "java.lang.String",
+      "description": "Llave de integridad para firmar transacciones (signature:integrity)."
+    },
+    {
+      "name": "wompi.events-secret",
+      "type": "java.lang.String",
+      "description": "Secreto para verificar firma de webhooks de Wompi."
+    },
+    {
+      "name": "wompi.currency",
+      "type": "java.lang.String",
+      "defaultValue": "COP",
+      "description": "Moneda de las transacciones."
+    },
+    {
+      "name": "wompi.success-url",
+      "type": "java.lang.String",
+      "description": "URL a donde vuelve el usuario tras pagar con exito."
+    },
+    {
+      "name": "wompi.failure-url",
+      "type": "java.lang.String",
+      "description": "URL a donde vuelve el usuario si el pago falla."
+    },
+    {
+      "name": "wompi.pending-url",
+      "type": "java.lang.String",
+      "description": "URL a donde vuelve el usuario si el pago queda pendiente."
+    },
+    {
+      "name": "donaciones.min-amount",
+      "type": "java.lang.Long",
+      "defaultValue": 1000,
+      "description": "Monto minimo de donacion en pesos COP."
+    },
+    {
+      "name": "donaciones.max-amount",
+      "type": "java.lang.Long",
+      "defaultValue": 10000000,
+      "description": "Monto maximo de donacion en pesos COP."
+    },
+    {
+      "name": "donaciones.rate-limit-max-attempts",
+      "type": "java.lang.Integer",
+      "defaultValue": 5,
+      "description": "Maximo de intentos de donacion por IP por ventana."
+    },
+    {
+      "name": "donaciones.rate-limit-window-minutes",
+      "type": "java.lang.Long",
+      "defaultValue": 60,
+      "description": "Ventana de rate limiting en minutos."
     }
   ],
   "hints": []

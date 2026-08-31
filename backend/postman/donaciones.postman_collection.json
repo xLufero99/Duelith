@@ -1,0 +1,161 @@
+{
+  "info": {
+    "name": "Duelith - Donaciones (Wompi)",
+    "description": "Coleccion para probar el sistema de donaciones de Duelith con la pasarela Wompi (widget).\n\nConfigura las variables de entorno de la coleccion:\n- baseUrl: URL del backend (ej: http://localhost:8080 o https://tu-backend)\n- eventsSecret: WOMPI_EVENTS_SECRET del backend (para la firma del webhook)\n\nFlujo: POST /create -> redirige al redirectUrl (widget de Wompi) -> Wompi notifica el webhook -> GET /{referencia} para consultar el estado.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "eventsSecret",
+      "value": "ev_test_xxxxxxxxxxxxxxxxxx",
+      "type": "string"
+    },
+    {
+      "key": "reference",
+      "value": "DON-test-123",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Crear donacion",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/donaciones/create",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "donaciones", "create"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 25000,\n  \"email\": \"donante@correo.com\",\n  \"paymentMethod\": \"NEQUI\",\n  \"sessionId\": \"sess-123\",\n  \"deviceId\": \"dev-123\"\n}"
+        },
+        "description": "Crea la donacion. El backend valida el monto, genera la firma de integridad y crea la transaccion en Wompi. Devuelve redirectUrl (widget de Wompi).\n\nErrores esperados: 400 si el monto < 1000 o > 10,000,000; 429 si excedes el rate limit (5 intentos/hora/IP)."
+      }
+    },
+    {
+      "name": "Crear donacion - monto invalido (prueba de validacion)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/donaciones/create",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "donaciones", "create"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 500,\n  \"email\": \"donante@correo.com\",\n  \"paymentMethod\": \"PSE\",\n  \"sessionId\": \"sess-123\",\n  \"deviceId\": \"dev-123\"\n}"
+        },
+        "description": "Debe devolver 400: el monto esta por debajo del minimo ($1,000). Confirma que el backend valida siempre."
+      }
+    },
+    {
+      "name": "Estado de donacion por referencia",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/donaciones/{{reference}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "donaciones", "{{reference}}"]
+        },
+        "description": "Consulta publica el estado (PENDING, APPROVED, REJECTED, EXPIRED, ERROR) de una donacion."
+      }
+    },
+    {
+      "name": "Mis donaciones (autenticado)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/donaciones/mis-donaciones",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "donaciones", "mis-donaciones"]
+        },
+        "description": "Requiere autenticacion (JWT). Devuelve las donaciones del usuario."
+      }
+    },
+    {
+      "name": "Webhook de donaciones (simular evento)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Wompi-Timestamp",
+            "value": "{{$timestamp}}",
+            "type": "text"
+          },
+          {
+            "key": "X-Wompi-Signature",
+            "value": "{{webhookSignature}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/webhook/donations",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "webhook", "donations"]
+        },
+        "event": [
+          {
+            "listen": "prerequest",
+            "script": {
+              "exec": [
+                "const ts = Date.now().toString();",
+                "const body = JSON.stringify({",
+                "  event: 'transaction.updated',",
+                "  data: { transaction: { id: 'tx_test_1', status: 'APPROVED', amount_in_cents: 2500000, reference: pm.variables.get('reference'), currency: 'COP' } }",
+                "});",
+                "pm.variables.set('webhookBody', body);",
+                "pm.variables.set('webhookTimestamp', ts);",
+                "pm.variables.set('webhookSignature', CryptoJS.SHA256(ts + body + pm.variables.get('eventsSecret')).toString());"
+              ],
+              "type": "text/javascript"
+            }
+          },
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Webhook procesado (200)', () => pm.response.to.have.status(200));"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{{webhookBody}}"
+        },
+        "description": "Simula el webhook de Wompi. El pre-request script calcula X-Wompi-Signature = SHA256(timestamp + body + eventsSecret). Debe responder 200."
+      }
+    }
+  ]
+}
