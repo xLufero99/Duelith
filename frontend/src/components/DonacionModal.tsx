@@ -38,6 +38,7 @@ export default function DonacionModal({
   const [otroValor, setOtroValor] = useState("");
   const [metodo, setMetodo] = useState<MetodoPagoDonacion>("NEQUI");
   const [email, setEmail] = useState(usuario?.email ?? "");
+  const [fullName, setFullName] = useState(usuario?.nombreUsuario ?? "");
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +55,7 @@ export default function DonacionModal({
     setMontoSeleccionado(5000);
     setOtroValor("");
     if (usuario?.email) setEmail(usuario.email);
+    if (usuario?.nombreUsuario) setFullName(usuario.nombreUsuario);
   }, [abierto, usuario]);
 
   const monto = useMemo(() => {
@@ -89,6 +91,9 @@ export default function DonacionModal({
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return "Ingresa un email válido.";
     }
+    if (fullName.trim().length < 2) {
+      return "Ingresa tu nombre completo.";
+    }
     return null;
   }
 
@@ -104,6 +109,7 @@ export default function DonacionModal({
       const resultado = await crearDonacion({
         amount: monto,
         email: email.trim(),
+        fullName: fullName.trim(),
         paymentMethod: metodo,
         sessionId: sessionIdRef.current,
         deviceId: deviceIdRef.current,
@@ -212,6 +218,16 @@ export default function DonacionModal({
             );
           })}
         </div>
+
+        {/* Nombre completo */}
+        <p style={{ ...label, marginTop: 20 }}>Nombre completo</p>
+        <input
+          type="text"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="Tu nombre completo"
+          style={input}
+        />
 
         {/* Email */}
         <p style={{ ...label, marginTop: 20 }}>Email del donante</p>

@@ -48,6 +48,7 @@ export interface DonacionResultadoResponse {
 export interface CrearDonacionRequest {
   amount: number;
   email: string;
+  fullName: string;
   paymentMethod: MetodoPagoDonacion;
   sessionId: string;
   deviceId: string;

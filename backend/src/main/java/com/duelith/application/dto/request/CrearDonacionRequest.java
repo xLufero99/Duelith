@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -31,6 +32,11 @@ public class CrearDonacionRequest {
     @NotBlank(message = "El email es obligatorio")
     @Email(message = "Formato de email invalido")
     private String email;
+
+    /** Nombre completo del donante (Wompi lo exige en customer_data.full_name). */
+    @NotBlank(message = "El nombre completo es obligatorio")
+    @Size(min = 2, max = 120, message = "El nombre completo debe tener entre 2 y 120 caracteres")
+    private String fullName;
 
     @NotNull(message = "El metodo de pago es obligatorio")
     private MetodoPagoDonacion paymentMethod;

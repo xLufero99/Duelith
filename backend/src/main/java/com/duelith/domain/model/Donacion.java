@@ -52,6 +52,10 @@ public class Donacion {
     @Column(nullable = false, length = 255)
     private String email;
 
+    /** Nombre completo del donante (exigido por Wompi en customer_data.full_name). */
+    @Column(name = "full_name", nullable = false, length = 120)
+    private String fullName;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", nullable = false, length = 20)
     private MetodoPagoDonacion paymentMethod;

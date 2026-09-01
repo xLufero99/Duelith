@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS donaciones (
     reference            VARCHAR(60) NOT NULL UNIQUE,
     amount               NUMERIC(14,2) NOT NULL,
     email                VARCHAR(255) NOT NULL,
+    full_name            VARCHAR(120) NOT NULL,
     payment_method       VARCHAR(20) NOT NULL,          -- NEQUI | PSE
     status               VARCHAR(20) NOT NULL,          -- PENDING|APPROVED|REJECTED|EXPIRED|ERROR
     session_id           VARCHAR(255),

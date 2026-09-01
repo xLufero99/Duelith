@@ -77,6 +77,7 @@ public class DonacionServiceImpl implements DonacionServicePort {
                 .reference(referencia)
                 .amount(BigDecimal.valueOf(request.getAmount()))
                 .email(request.getEmail())
+                .fullName(request.getFullName())
                 .paymentMethod(request.getPaymentMethod())
                 .status(EstadoDonacion.PENDING)
                 .sessionId(request.getSessionId())
@@ -127,7 +128,9 @@ public class DonacionServiceImpl implements DonacionServicePort {
                 .customerEmail(donacion.getEmail())
                 .reference(donacion.getReference())
                 .sessionId(donacion.getSessionId())
-                .customerData(Map.of("device_id", donacion.getDeviceId()))
+                .customerData(Map.of(
+                        "full_name", donacion.getFullName(),
+                        "device_id", donacion.getDeviceId()))
                 .signatureIntegrity(firma)
                 .redirectUrls(Map.of(
                         "success", wompiProperties.successUrl(),

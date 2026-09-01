@@ -23,6 +23,7 @@ public class DonacionResponse {
     private String reference;
     private BigDecimal amount;
     private String email;
+    private String fullName;
     private MetodoPagoDonacion paymentMethod;
     private EstadoDonacion status;
     private String transactionId;

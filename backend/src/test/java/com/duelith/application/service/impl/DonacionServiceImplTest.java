@@ -60,6 +60,7 @@ class DonacionServiceImplTest {
         requestValido = CrearDonacionRequest.builder()
                 .amount(25000L)
                 .email("donante@correo.com")
+                .fullName("Ana Torres")
                 .paymentMethod(MetodoPagoDonacion.NEQUI)
                 .sessionId("sess123")
                 .deviceId("dev123")
